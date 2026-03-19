@@ -16,8 +16,6 @@ import com.ctre.phoenix6.signals.RGBWColor;
 import com.ctre.phoenix6.signals.StatusLedWhenActiveValue;
 import com.ctre.phoenix6.signals.StripTypeValue;
 
-import edu.wpi.first.wpilibj.util.Color;
-
 import static frc.robot.subsystems.candle.CANdleConstants.*;
 
 public class CANdleIOLEDs implements CANdleIO {
@@ -66,7 +64,7 @@ public class CANdleIOLEDs implements CANdleIO {
     switch (currentAnimationType) {
       default:
       case None:
-        setColor(currentColor);
+        setLEDColor(currentColor);
         break;
       case ColorFlow:
         candle.setControl(
@@ -122,9 +120,13 @@ public class CANdleIOLEDs implements CANdleIO {
     }
   }
 
+  private void setLEDColor(RGBWColor color) {
+    candle.setControl(new SolidColor(kFirstLED, kEndLED).withColor(color));
+  }
+
   @Override
-  public void setColor(RGBWColor colour) {
-    candle.setControl(new SolidColor(kFirstLED, kEndLED).withColor(colour));
+  public void setColor(RGBWColor color) {
+    targetColor = color;
   }
 
   @Override

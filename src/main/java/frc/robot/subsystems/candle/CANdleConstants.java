@@ -16,4 +16,20 @@ public class CANdleConstants {
   public static final double kOffBrightness = 0;
   /** Default brightness of all the LEDs for the brightness scalar */
   public static final double kDefaultBrightness = 0.2;
+
+  /**
+  * LED Animation type
+  */
+  public enum AnimationType {
+      None,
+      ColorFlow,
+      Rainbow,
+      Strobe,
+      SingleFade,
+      RgbFade,
+      Twinkle,
+      TwinkleOff,
+      Larson,
+      Fire,
+  }
 }

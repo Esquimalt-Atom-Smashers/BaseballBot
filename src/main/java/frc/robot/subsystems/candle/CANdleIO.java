@@ -2,6 +2,7 @@ package frc.robot.subsystems.candle;
 
 import static frc.robot.subsystems.candle.CANdleConstants.kFirstLED;
 import static frc.robot.subsystems.candle.CANdleConstants.kEndLED;
+import static frc.robot.subsystems.candle.CANdleConstants.AnimationType;
 
 import org.littletonrobotics.junction.AutoLog;
 import com.ctre.phoenix6.signals.RGBWColor;
@@ -23,44 +24,24 @@ public interface CANdleIO {
         int startLEDIndex = kFirstLED;
         int endLEDIndex = kEndLED;
     }
-
-    /**
-     * LED Animation type
-     */
-    public enum AnimationType {
-        None,
-        ColorFlow,
-        Rainbow,
-        Strobe,
-        SingleFade,
-        RgbFade,
-        Twinkle,
-        TwinkleOff,
-        Larson,
-        Fire,
-    }
-
+    
     /**
      * Update inputs from the hardware.
      */
-    default void updateInputs(CANdleIOInputs inputs) {
-    }
+    default void updateInputs(CANdleIOInputs inputs) { }
 
     /**
      * Set the LEDs color.
      */
-    default void setColor(RGBWColor colour) {
-    }
+    default void setColor(RGBWColor colour) { }
 
     /**
      * Set the strobe animation of the LEDs
      */
-    default void setAnimationType(AnimationType type) {
-    }
+    default void setAnimationType(AnimationType type) { }
 
     /**
      * Clear the LEDs
      */
-    default void clear() {
-    }
+    default void clear() { }
 }
