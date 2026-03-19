@@ -1,9 +1,10 @@
 package frc.robot.subsystems.candle;
 
-import org.littletonrobotics.junction.AutoLog;
+import static frc.robot.subsystems.candle.CANdleConstants.FIRST_LED_INDEX;
+import static frc.robot.subsystems.candle.CANdleConstants.LAST_LED_INDEX;
+import static frc.robot.subsystems.candle.CANdleConstants.WHITE;
 
-import com.ctre.phoenix6.controls.RainbowAnimation;
-import com.ctre.phoenix6.controls.StrobeAnimation;
+import org.littletonrobotics.junction.AutoLog;
 import com.ctre.phoenix6.signals.RGBWColor;
 
 /** IO interface for the Extender (one motor, position controlled). */
@@ -13,6 +14,10 @@ public interface CANdleIO {
   class CANdleIOInputs {
     AnimationType currentAnimationType = AnimationType.None;
     AnimationType targetAnimationType = AnimationType.None;
+    RGBWColor currentColor = WHITE;
+    RGBWColor targetColor = WHITE;
+    int startLEDIndex = FIRST_LED_INDEX;
+    int endLEDIndex = LAST_LED_INDEX;
   }
 
   /** LED Animation type */
