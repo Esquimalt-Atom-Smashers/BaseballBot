@@ -4,6 +4,7 @@ import org.littletonrobotics.junction.Logger;
 
 import com.ctre.phoenix6.controls.RainbowAnimation;
 import com.ctre.phoenix6.controls.StrobeAnimation;
+import com.ctre.phoenix6.signals.RGBWColor;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.util.Units;
@@ -11,7 +12,9 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
-/** CANdle subsystem: controls the robots LED lights */
+/** CANdle subsystem: controls the robots LED lights
+ * Online example of CANdle subsystem for reference: https://github.com/CrossTheRoadElec/Phoenix6-Examples/blob/main/java/CANdle/src/main/java/frc/robot/Robot.java
+ */
 public class CANdle extends SubsystemBase {
 
   private final CANdleIO candleIO;
@@ -32,22 +35,10 @@ public class CANdle extends SubsystemBase {
   } // End periodic
 
   /** Set the LEDs color */
-  public void setLEDColor(CANdleIO.Colour colour) {
+  public void setLEDColor(RGBWColor colour) {
     clearLEDs();
     candleIO.setColor(colour);
   } // End setLEDColor
-
-  /** Set the LEDs strobe animation */
-  public void setLEDStrobeAnimation(StrobeAnimation animation) {
-    clearLEDs();
-    candleIO.setStrobeAnimation(animation);
-  } // End setLEDStrobeAnimation
-
-  /** Set the LEDs rainbow animation */
-  public void setLEDRainbowAnimation(RainbowAnimation animation) {
-    clearLEDs();
-    candleIO.setRainbowAnimation(animation);
-  } // End setLEDRainbowAnimation
 
   /** Clear the LEDs and turn them all off */
   public void clearLEDs() {
