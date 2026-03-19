@@ -13,6 +13,7 @@ import com.ctre.phoenix6.signals.RGBWColor;
 import com.ctre.phoenix6.signals.StatusLedWhenActiveValue;
 import com.ctre.phoenix6.signals.StripTypeValue;
 
+import edu.wpi.first.wpilibj.util.Color;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 
 import static frc.robot.subsystems.candle.CANdleConstants.*;
@@ -31,13 +32,14 @@ public class CANdleIOLEDs implements CANdleIO {
   private int endIndex;
 
   public CANdleIOLEDs() {
-    candle = new CANdle(CANDLE_LED_DEVICE_ID);
+    candle = new CANdle(kDeviceID);
 
     CANdleConfiguration config = new CANdleConfiguration();
     config.LED.StripType = StripTypeValue.RGB;
-    config.LED.BrightnessScalar = LED_DEFAULT_BRIGHTNESS;
+    config.LED.BrightnessScalar = kDefaultBrightness;
     config.CANdleFeatures.StatusLedWhenActive = StatusLedWhenActiveValue.Disabled;
 
+    setColor(new RGBWColor(Color.kWhite));
     candle.getConfigurator().apply(config);
   } // End ExtenderIOSParkMax
 
@@ -90,7 +92,7 @@ public class CANdleIOLEDs implements CANdleIO {
 
   @Override
   public void setColor(RGBWColor colour) {
-    candle.setControl(new SolidColor(FIRST_LED_INDEX, LAST_LED_INDEX).withColor(colour));
+    candle.setControl(new SolidColor(kFirstLED, kEndLED).withColor(colour));
   }
 
   @Override
