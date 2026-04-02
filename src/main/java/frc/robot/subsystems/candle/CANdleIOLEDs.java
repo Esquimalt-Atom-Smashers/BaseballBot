@@ -17,47 +17,54 @@ import com.ctre.phoenix6.signals.StatusLedWhenActiveValue;
 import com.ctre.phoenix6.signals.StripTypeValue;
 
 import static frc.robot.subsystems.candle.CANdleConstants.*;
+import java.util.Objects;
 
 public class CANdleIOLEDs implements CANdleIO {
 
   private final CANdle candle;
   
-  private AnimationType targetAnimationType;
-  private AnimationType currentAnimationType;
+  private AnimationType targetAnimationType = AnimationType.None;
+  private AnimationType currentAnimationType = AnimationType.None;
 
-  private RGBWColor targetColor;
-  private RGBWColor currentColor;
+  private RGBWColor targetColor = new RGBWColor();
+  private RGBWColor currentColor = new RGBWColor();
 
-  private int startIndex;
-  private int endIndex;
+  private int startIndex = kFirstLED;
+  private int endIndex = kEndLED;
 
   public CANdleIOLEDs() {
     candle = new CANdle(kDeviceID);
 
     CANdleConfiguration config = new CANdleConfiguration();
-    config.LED.StripType = StripTypeValue.RGB;
+    config.LED.StripType = StripTypeValue.GRB;
     config.LED.BrightnessScalar = kDefaultBrightness;
     config.CANdleFeatures.StatusLedWhenActive = StatusLedWhenActiveValue.Disabled;
 
     candle.getConfigurator().apply(config);
-  } // End ExtenderIOSParkMax
+
+    // Ensure deterministic startup state (known-off) before any commands call setLEDColor/setLEDAnimation.
+    clear();
+  } // End CANdleIOLEDs Constructor
 
   @Override
   public void updateInputs(CANdleIOInputs inputs) {
-    inputs.currentAnimationType = targetAnimationType;
-    //inputs.currentColor = currentColor;s
-    inputs.startLEDIndex = startIndex;
-    inputs.endLEDIndex = endIndex;
-
-    if (currentAnimationType != targetAnimationType || currentColor != targetColor) {
+    if (currentAnimationType != targetAnimationType || !Objects.equals(currentColor, targetColor)) {
       currentAnimationType = targetAnimationType;
       currentColor = targetColor;
 
       setLEDAnimation();
     }
+
+    inputs.currentAnimationType = currentAnimationType;
+    inputs.currentColorRed = currentColor.Red;
+    inputs.currentColorGreen = currentColor.Green;
+    inputs.currentColorBlue = currentColor.Blue;
+    inputs.currentColorWhite = currentColor.White;
+    inputs.startLEDIndex = startIndex;
+    inputs.endLEDIndex = endIndex;
   } // End updateInputs
 
-  /** Sets the LED animation on the CANdle using the {@link #currentColor} and the {@link #currentAnimationType}  */
+  /** Sets the LED animation on the CANdle. */
   private void setLEDAnimation() {
     switch (currentAnimationType) {
       default:
@@ -116,19 +123,30 @@ public class CANdleIOLEDs implements CANdleIO {
         );
         break;
     }
-  }
+  } // End setLEDAnimation
 
   private void setLEDColor(RGBWColor color) {
-    candle.setControl(new SolidColor(kFirstLED, kEndLED).withColor(color));
-  }
+    candle.setControl(new SolidColor(startIndex, endIndex).withColor(color));
+  } // End setLEDColor
+
+  @Override
+  public void clear() {
+    targetAnimationType = AnimationType.None;
+    targetColor = new RGBWColor();
+
+    currentAnimationType = AnimationType.None;
+    currentColor = targetColor;
+
+    candle.setControl(new SolidColor(startIndex, endIndex).withColor(targetColor));
+  } // End clear
 
   @Override
   public void setColor(RGBWColor color) {
-    targetColor = color;
-  }
+    targetColor = color != null ? color : new RGBWColor();
+  } // End setColor
 
   @Override
   public void setAnimationType(AnimationType type) {
-    targetAnimationType = type;
-  }
+    targetAnimationType = type != null ? type : AnimationType.None;
+  } // End setAnimationType
 }

@@ -1,13 +1,15 @@
 package frc.robot.subsystems.candle;
 
+import static frc.robot.subsystems.candle.CANdleConstants.AnimationType;
+import static frc.robot.subsystems.candle.CANdleConstants.kGreen;
+import static frc.robot.subsystems.candle.CANdleConstants.kOrange;
+import static frc.robot.subsystems.candle.CANdleConstants.kRed;
+
 import com.ctre.phoenix6.signals.RGBWColor;
 
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.subsystems.candle.CANdleConstants.AnimationType;
-
-import static frc.robot.subsystems.candle.CANdleConstants.AnimationType;
-
+import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
 /** CANdle subsystem: controls the robots LED lights
@@ -18,36 +20,68 @@ public class CANdle extends SubsystemBase {
   private final CANdleIO candleIO;
   private final CANdleIO.CANdleIOInputs candleIOInputs = new CANdleIO.CANdleIOInputs();
 
+  private BooleanSupplier shootWhenReadySupplier = () -> false;
+  private BooleanSupplier manualOverrideSupplier = () -> false;
+
   public CANdle(CANdleIO io) {
-    candleIO = io; 
-  }
+    candleIO = io;
+  } // End CANdle Constructor
 
   @Override
   public void periodic() {
+    boolean override = manualOverrideSupplier.getAsBoolean();
+    boolean shootReady = shootWhenReadySupplier.getAsBoolean();
+
+    if (override) {
+      setLEDAnimation(AnimationType.Strobe);
+      setLEDColor(kRed);
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "OverrideStrobe");
+    } else if (shootReady) {
+      setLEDAnimation(AnimationType.None);
+      setLEDColor(kGreen);
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReady");
+    } else if (DriverStation.isEnabled()) {
+      setLEDAnimation(AnimationType.None);
+      setLEDColor(kOrange);
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "EnabledIdle");
+    } else {
+      setLEDAnimation(AnimationType.Rainbow);
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "DisabledRainbow");
+    }
+
     candleIO.updateInputs(candleIOInputs);
 
-    //Logger.recordOutput("Subsystems/LED/Inputs/CurrentAnimationType", candleIOInputs.currentAnimationType);
-    //Logger.recordOutput("Subsystems/LED/Inputs/AppliedVolts", candleIOInputs.appliedVolts);
-    //Logger.recordOutput("Subsystems/LED/Inputs/SupplyCurrentAmps", candleIOInputs.supplyCurrentAmps);
-    //Logger.recordOutput("Subsystems/LED/TargetVolts", getTargetVoltage());
-    //Logger.recordOutput("Subsystems/LED/State", state.name());
-
-    if (DriverStation.isDisabled()) {
-      candleIO.clear();
-      return;
-    }
+    Logger.recordOutput("Subsystems/LED/CANdle/Inputs/CurrentAnimationType", candleIOInputs.currentAnimationType.name());
+    Logger.recordOutput(
+        "Subsystems/LED/CANdle/Inputs/CurrentColorHex",
+        String.format(
+            "#%02X%02X%02X%02X",
+            candleIOInputs.currentColorRed,
+            candleIOInputs.currentColorGreen,
+            candleIOInputs.currentColorBlue,
+            candleIOInputs.currentColorWhite));
+    Logger.recordOutput("Subsystems/LED/CANdle/Inputs/StartLEDIndex", candleIOInputs.startLEDIndex);
+    Logger.recordOutput("Subsystems/LED/CANdle/Inputs/EndLEDIndex", candleIOInputs.endLEDIndex);
   } // End periodic
+
+  /** Supplier: true while {@link frc.robot.commands.ShootWhenReadyCommand} (or equivalent) is active. */
+  public void setShootWhenReadySupplier(BooleanSupplier supplier) {
+    shootWhenReadySupplier = supplier != null ? supplier : () -> false;
+  } // End setShootWhenReadySupplier
+
+  /** Supplier: true when driver or operator manual override should flash red. */
+  public void setManualOverrideSupplier(BooleanSupplier supplier) {
+    manualOverrideSupplier = supplier != null ? supplier : () -> false;
+  } // End setManualOverrideSupplier
 
   /** Set the LEDs color to be used in the current animation */
   public void setLEDColor(RGBWColor colour) {
-    clearLEDs();
-    candleIO.setColor(colour);
+    candleIO.setColor(colour != null ? colour : new RGBWColor());
   } // End setLEDColor
 
   /** Set the LEDs animation to be played */
   public void setLEDAnimation(AnimationType type) {
-    clearLEDs();
-    candleIO.setAnimationType(type);
+    candleIO.setAnimationType(type != null ? type : AnimationType.None);
   } // End setLEDAnimation
 
   /** Clear the LEDs and turn them all off */
