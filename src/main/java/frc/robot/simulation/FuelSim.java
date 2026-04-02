@@ -291,6 +291,10 @@ public class FuelSim {
         }
         activeCells.clear();
 
+        if (fuels.size() < 2) {
+            return;
+        } // End early exit no pairs
+
         // Populate grid
         for (Fuel fuel : fuels) {
             int col = (int) (fuel.pos.getX() / CELL_SIZE);
@@ -459,7 +463,11 @@ public class FuelSim {
      * at RealOutputs/FieldSimulation/Fuels for AdvantageScope visualization.
      */
     public void logFuels() {
-        Translation3d[] positions = fuels.stream().map((fuel) -> fuel.pos).toArray(Translation3d[]::new);
+        int n = fuels.size();
+        Translation3d[] positions = new Translation3d[n];
+        for (int i = 0; i < n; i++) {
+            positions[i] = fuels.get(i).pos;
+        }
         fuelPublisher.set(positions);
         Logger.recordOutput(LOG_FUELS_KEY, positions);
     } // End logFuels
@@ -677,27 +685,60 @@ public class FuelSim {
         if (robotVel.dot(normal) > 0) fuel.addImpulse(new Translation3d(normal.times(robotVel.dot(normal))));
     }
 
+    /** Matches RobotContainer intake: 10.5 in beyond front of frame (robot +X). */
+    private static final double kIntakeBeyondFrontMeters = 10.5 * 0.0254;
+
+    /**
+     * Furthest point on bumpers + extended intake from robot center (robot frame), plus fuel radius
+     * and slack — balls outside this field-XY circle skip bumper and intake checks.
+     */
+    private double robotFieldInfluenceRadiusSq() {
+        double halfL = robotLength * 0.5;
+        double halfW = robotWidth * 0.5;
+        double reach = Math.hypot(halfL + kIntakeBeyondFrontMeters, halfW) + FUEL_RADIUS + 0.15;
+        return reach * reach;
+    } // End robotFieldInfluenceRadiusSq
+
     protected void handleRobotCollisions(ArrayList<Fuel> fuels) {
         Pose2d robot = robotPoseSupplier.get();
         ChassisSpeeds speeds = robotFieldSpeedsSupplier.get();
         Translation2d robotVel = new Translation2d(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
 
+        double rx = robot.getX();
+        double ry = robot.getY();
+        double reachSq = robotFieldInfluenceRadiusSq();
+
         for (Fuel fuel : fuels) {
+            double dx = fuel.pos.getX() - rx;
+            double dy = fuel.pos.getY() - ry;
+            if (dx * dx + dy * dy > reachSq) {
+                continue;
+            }
             handleRobotCollision(fuel, robot, robotVel);
         }
-    }
+    } // End handleRobotCollisions
 
     protected void handleIntakes(ArrayList<Fuel> fuels) {
         Pose2d robot = robotPoseSupplier.get();
+        double rx = robot.getX();
+        double ry = robot.getY();
+        double reachSq = robotFieldInfluenceRadiusSq();
+
         for (SimIntake intake : intakes) {
             for (int i = 0; i < fuels.size(); i++) {
-                if (intake.shouldIntake(fuels.get(i), robot)) {
+                Fuel fuel = fuels.get(i);
+                double dx = fuel.pos.getX() - rx;
+                double dy = fuel.pos.getY() - ry;
+                if (dx * dx + dy * dy > reachSq) {
+                    continue;
+                }
+                if (intake.shouldIntake(fuel, robot)) {
                     fuels.remove(i);
                     i--;
                 }
             }
         }
-    }
+    } // End handleIntakes
 
     protected static void fuelCollideRectangle(Fuel fuel, Translation3d start, Translation3d end) {
         if (fuel.pos.getZ() > end.getZ() + FUEL_RADIUS || fuel.pos.getZ() < start.getZ() - FUEL_RADIUS)
