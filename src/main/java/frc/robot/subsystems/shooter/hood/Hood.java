@@ -30,7 +30,7 @@ public class Hood extends SubsystemBase {
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Hood(HoodIO io) {
-    this(io, "Subsystems/Shooter/Hood");
+    this(io, "");
   } // End Hood Constructor
 
   public Hood(HoodIO io, String logRoot) {
@@ -46,14 +46,14 @@ public class Hood extends SubsystemBase {
   @Override
   public void periodic() {
     hoodIO.updateInputs(hoodInputs);
-    Logger.recordOutput(logRoot + "/Inputs/MotorConnected", hoodInputs.motorConnected);
-    Logger.recordOutput(logRoot + "/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
-    Logger.recordOutput(logRoot + "/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
-    Logger.recordOutput(logRoot + "/Inputs/AppliedVolts", hoodInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "/TargetPositionAngle", Units.radiansToDegrees(targetAngleRad));
-    Logger.recordOutput(logRoot + "/AtTargetPosition", atTarget());
-    Logger.recordOutput(logRoot + "/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(targetAngleRad));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
 
     if (DriverStation.isDisabled()) {
       state = State.IDLE;

@@ -29,7 +29,7 @@ public class Agitator extends SubsystemBase {
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Agitator(AgitatorIO io) {
-    this(io, "Subsystems/Agitator");
+    this(io, "");
   } // End Agitator Constructor
 
   public Agitator(AgitatorIO io, String logRoot) {
@@ -40,11 +40,11 @@ public class Agitator extends SubsystemBase {
   @Override
   public void periodic() {
     agitatorIO.updateInputs(agitatorInputs);
-    Logger.recordOutput(logRoot + "/Inputs/MotorConnected", agitatorInputs.motorConnected);
-    Logger.recordOutput(logRoot + "/Inputs/AppliedVolts", agitatorInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "/Inputs/SupplyCurrentAmps", agitatorInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "/TargetVolts", getTargetVoltage());
-    Logger.recordOutput(logRoot + "/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/MotorConnected", agitatorInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/AppliedVolts", agitatorInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/SupplyCurrentAmps", agitatorInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/State", state.name());
 
     if (DriverStation.isDisabled()) {
       agitatorIO.stop();

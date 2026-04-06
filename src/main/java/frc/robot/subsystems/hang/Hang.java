@@ -31,7 +31,7 @@ public class Hang extends SubsystemBase {
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Hang(HangIO io) {
-    this(io, "Subsystems/Hang");
+    this(io, "");
   } // End Hang Constructor
 
   public Hang(HangIO io, String logRoot) {
@@ -47,14 +47,14 @@ public class Hang extends SubsystemBase {
   @Override
   public void periodic() {
     hangIO.updateInputs(hangInputs);
-    Logger.recordOutput(logRoot + "/Inputs/MotorConnected", hangInputs.motorConnected);
-    Logger.recordOutput(logRoot + "/Inputs/PositionInches", Units.metersToInches(hangInputs.positionMeters));
-    Logger.recordOutput(logRoot + "/Inputs/VelocityInchesPerSec", Units.metersToInches(hangInputs.velocityMetersPerSec));
-    Logger.recordOutput(logRoot + "/Inputs/AppliedVolts", hangInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "/Inputs/SupplyCurrentAmps", hangInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "/TargetPositionInches", Units.metersToInches(targetPositionMeters));
-    Logger.recordOutput(logRoot + "/AtTargetPosition", atTargetPosition());
-    Logger.recordOutput(logRoot + "/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/MotorConnected", hangInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/PositionInches", Units.metersToInches(hangInputs.positionMeters));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/VelocityInchesPerSec", Units.metersToInches(hangInputs.velocityMetersPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/AppliedVolts", hangInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/SupplyCurrentAmps", hangInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Hang/TargetPositionInches", Units.metersToInches(targetPositionMeters));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/AtTargetPosition", atTargetPosition());
+    Logger.recordOutput(logRoot + "Subsystems/Hang/State", state.name());
 
     if (DriverStation.isDisabled()) {
       hangIO.stop();

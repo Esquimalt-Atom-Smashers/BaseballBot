@@ -32,14 +32,14 @@ public class Module {
   private final Alert turnEncoderDisconnectedAlert;
   private SwerveModulePosition[] odometryPositions = new SwerveModulePosition[] {};
 
-  private final String inputsLogName;
+  private final String logRoot;
 
   public Module(
       ModuleIO io,
       int index,
       SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
           constants) {
-    this(io, index, constants, "Drive");
+    this(io, index, constants, "");
   } // End Module Constructor
 
   public Module(
@@ -47,11 +47,11 @@ public class Module {
       int index,
       SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
           constants,
-      String inputsLogNamePrefix) {
+      String logRoot) {
     this.io = io;
     this.index = index;
     this.constants = constants;
-    this.inputsLogName = inputsLogNamePrefix;
+    this.logRoot = logRoot != null ? logRoot : "";
     driveDisconnectedAlert =
         new Alert(
             "Disconnected drive motor on module " + Integer.toString(index) + ".",
@@ -67,7 +67,7 @@ public class Module {
 
   public void periodic() {
     io.updateInputs(inputs);
-    Logger.processInputs(inputsLogName + "/Module" + Integer.toString(index), inputs);
+    Logger.processInputs(logRoot + "Drive/Module" + Integer.toString(index), inputs);
 
     // Calculate positions for odometry
     int sampleCount = inputs.odometryTimestamps.length; // All signals are sampled together
@@ -112,9 +112,10 @@ public class Module {
     return inputs.turnPosition; // XXX: Consider if it should be relative or absolute (inputs.turnAbsolutePosition)
   }
 
+  /** Returns drive wheel angular velocity (rad/s). */
   public double getVelocity() {
     return inputs.driveVelocityRadPerSec;
-  } 
+  }
 
   /** Returns the current drive position of the module in meters. */
   public double getPositionMeters() {

@@ -1,15 +1,8 @@
 package frc.robot.commands;
 
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.geometry.*;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
-import static edu.wpi.first.units.Units.Meters;
-import static edu.wpi.first.units.Units.MetersPerSecond;
-import static edu.wpi.first.units.Units.Radians;
-import static edu.wpi.first.units.Units.RadiansPerSecond;
-
+import static edu.wpi.first.units.Units.*;
 import edu.wpi.first.math.util.Units;
 import frc.robot.FieldConstants;
 import frc.robot.subsystems.drive.Drive;
@@ -23,6 +16,7 @@ import frc.robot.subsystems.shooter.flywheel.FlywheelConstants;
 import frc.robot.subsystems.shooter.hood.Hood;
 import frc.robot.subsystems.shooter.hood.HoodConstants;
 import frc.robot.subsystems.shooter.turret.Turret;
+import frc.robot.simulation.SecondSimRobotOutputs;
 import frc.robot.util.AllianceUtil;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -35,8 +29,7 @@ public final class ShooterCommands {
   private ShooterCommands() {}
 
   private static final String kTargetAimOffsetDegKey = "Shooter/TargetAimOffsetDeg";
-  private static final String kExitVelocityMultiplierAdditiveKey =
-      "Shooter/ExitVelocityCompensationMultiplierAdditive";
+  private static final String kExitVelocityMultiplierAdditiveKey = "Shooter/ExitVelocityCompensationMultiplierAdditive";
   private static final double kDefaultTargetAimOffsetDeg = 0.0;
   private static final double kDefaultExitVelocityMultiplierAdditive = 0.0;
 
@@ -57,13 +50,13 @@ public final class ShooterCommands {
 
   /**
    * Optional per-{@link Drive} alliance for hub and passing-spot targets. Default when absent: {@link
-   * AllianceUtil#isRedAlliance()} (DriverStation). Second sim registers its {@link Drive} with {@link
-   * frc.robot.Constants.SimulationDrive#kSecondSimRobotRedAlliance}.
+   * AllianceUtil#isRedAlliance()} (DriverStation). Second sim registers its {@link Drive} with a supplier matching
+   * {@link frc.robot.RobotContainer}'s {@code kSecondSimRobotRedAlliance}.
    */
   private static final IdentityHashMap<Drive, BooleanSupplier> targetRedAllianceByDrive =
       new IdentityHashMap<>();
 
-  /** Call for the second sim drivetrain so {@link #getShooterTarget3d(Drive)} matches {@code kSecondSimRobotRedAlliance}. */
+  /** Call for the second sim drivetrain so {@link #getShooterTarget3d(Drive)} uses the same alliance as RobotContainer's second sim. */
   public static void registerTargetAllianceSupplier(Drive drive, BooleanSupplier isRedAlliance) {
     if (drive != null && isRedAlliance != null) {
       targetRedAllianceByDrive.put(drive, isRedAlliance);
@@ -71,8 +64,8 @@ public final class ShooterCommands {
   } // End registerTargetAllianceSupplier
 
   private static boolean isRedAllianceForShooterTarget(Drive drive) {
-    BooleanSupplier s = targetRedAllianceByDrive.get(drive);
-    return s != null ? s.getAsBoolean() : AllianceUtil.isRedAlliance();
+    BooleanSupplier redAllianceSupplier = targetRedAllianceByDrive.get(drive);
+    return redAllianceSupplier != null ? redAllianceSupplier.getAsBoolean() : AllianceUtil.isRedAlliance();
   } // End isRedAllianceForShooterTarget
 
   public enum PassingSpot {
@@ -117,10 +110,12 @@ public final class ShooterCommands {
 
   /** Current Shooter target for this drivetrain: passing spot or alliance hub (funnel top). */
   public static Translation3d getShooterTarget3d(Drive drive) {
-    boolean red = isRedAllianceForShooterTarget(drive);
+    boolean isRedAllianceForTarget = isRedAllianceForShooterTarget(drive);
     PassingSpot spot = passingSpotOverride;
-    if (spot != null) return getPassingSpot3d(spot, red);
-    return red ? FieldConstants.RED_FUNNEL_TOP_CENTER_3D : FieldConstants.BLUE_FUNNEL_TOP_CENTER_3D;
+    if (spot != null) return getPassingSpot3d(spot, isRedAllianceForTarget);
+    return isRedAllianceForTarget
+        ? FieldConstants.RED_FUNNEL_TOP_CENTER_3D
+        : FieldConstants.BLUE_FUNNEL_TOP_CENTER_3D;
   } // End getShooterTarget3d
 
   /** Get current target for logging. */
@@ -171,21 +166,29 @@ public final class ShooterCommands {
    * mechanism limits. Turret aim uses predicted target and shortest-path azimuth.
    * When {@code enableCalculator} is false (e.g. manual override), Hood and Flywheel targets are
    * not updated so manual override controls are functional.
+   *
+   * @param calculatorLogRoot AdvantageKit prefix; primary {@code ""}, second sim {@link
+   *     SecondSimRobotOutputs#LOG_ROOT_PREFIX}. Calculator outputs log under {@code calculatorLogRoot + "Shooter/…"}.
+   *     SmartDashboard calculator tuning uses the same {@code Shooter/…} keys for both robots.
    */
-  public static void setShooterTarget(Drive drive, Turret turret, Hood hood, Flywheel flywheel, boolean hoodEnabled, boolean enableCalculator) {
+  public static void setShooterTarget(Drive drive, Turret turret, Hood hood, Flywheel flywheel, boolean hoodEnabled, boolean enableCalculator, String calculatorLogRoot) {
+    String logRoot = calculatorLogRoot != null ? calculatorLogRoot : "";
+
     Pose2d pose = drive.getPose();
     ChassisSpeeds fieldSpeeds = drive.getFieldRelativeChassisSpeeds();
     Translation3d target3d = getShooterTarget3d(drive);
 
     // Phase delay: predict pose forward so shot is for when ball actually leaves
-    double dt = ShooterConstants.kPhaseDelaySec;
+    double phaseDelaySec = ShooterConstants.kPhaseDelaySec;
     Pose2d estimatedPose =
         new Pose2d(
             pose.getTranslation()
                 .plus(
                     new Translation2d(
-                        fieldSpeeds.vxMetersPerSecond * dt, fieldSpeeds.vyMetersPerSecond * dt)),
-            pose.getRotation().plus(Rotation2d.fromRadians(fieldSpeeds.omegaRadiansPerSecond * dt)));
+                        fieldSpeeds.vxMetersPerSecond * phaseDelaySec,
+                        fieldSpeeds.vyMetersPerSecond * phaseDelaySec)),
+            pose.getRotation()
+                .plus(Rotation2d.fromRadians(fieldSpeeds.omegaRadiansPerSecond * phaseDelaySec)));
 
     ShotData shot;
     if (hoodEnabled) {
@@ -203,8 +206,8 @@ public final class ShooterCommands {
     }
 
     double distanceM = ShooterCalculator.getDistanceToTarget(estimatedPose, shot.getTarget()).in(Meters);
-    Logger.recordOutput("Shooter/DistanceToHubMeters", distanceM);
-    Logger.recordOutput("Shooter/CalculatorHoodDeg", Units.radiansToDegrees(shot.getHoodAngle().in(Radians)));
+    Logger.recordOutput(logRoot + "Shooter/DistanceToHubMeters", distanceM);
+    Logger.recordOutput(logRoot + "Shooter/CalculatorHoodDeg", Units.radiansToDegrees(shot.getHoodAngle().in(Radians)));
     double exitVelMps = shot.getExitVelocity().in(MetersPerSecond);
     double exitVelocityMultiplierAdditive =
         SmartDashboard.getNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
@@ -212,9 +215,9 @@ public final class ShooterCommands {
             * (ShooterConstants.kExitVelocityCompensationMultiplier() + exitVelocityMultiplierAdditive);
     double flywheelRadPerSec = ShooterCalculator.linearToAngularVelocity(
             MetersPerSecond.of(flywheelSurfaceSpeedMps), Meters.of(FlywheelConstants.kFlywheelRadiusMeters)).in(RadiansPerSecond);
-    Logger.recordOutput("Shooter/CalculatorVelocityRpm", Units.radiansPerSecondToRotationsPerMinute(flywheelRadPerSec));
-    Logger.recordOutput("Shooter/ExitVelocityMps", exitVelMps);
-    Logger.recordOutput(kExitVelocityMultiplierAdditiveKey, exitVelocityMultiplierAdditive);
+    Logger.recordOutput(logRoot + "Shooter/CalculatorVelocityRpm", Units.radiansPerSecondToRotationsPerMinute(flywheelRadPerSec));
+    Logger.recordOutput(logRoot + "Shooter/ExitVelocityMps", exitVelMps);
+    Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditive", exitVelocityMultiplierAdditive);
 
     double hoodAngleRad =
         MathUtil.clamp(
@@ -236,6 +239,6 @@ public final class ShooterCommands {
                         estimatedPose, shot.getTarget(), turret.getPosition().getRadians())
                     .in(Radians))
             .plus(Rotation2d.fromDegrees(ShooterConstants.kTargetAimOffsetDeg + targetAimOffsetDegAdditive)));
-    Logger.recordOutput(kTargetAimOffsetDegKey, ShooterConstants.kTargetAimOffsetDeg + targetAimOffsetDegAdditive);
+    Logger.recordOutput(logRoot + "Shooter/TargetAimOffsetDeg", ShooterConstants.kTargetAimOffsetDeg + targetAimOffsetDegAdditive);
   } // End setShooterTarget
 }

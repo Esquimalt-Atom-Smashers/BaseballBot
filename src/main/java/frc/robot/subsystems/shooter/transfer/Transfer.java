@@ -31,7 +31,7 @@ public class Transfer extends SubsystemBase {
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Transfer(TransferIO io) {
-    this(io, "Subsystems/Shooter/Transfer");
+    this(io, "");
   } // End Transfer Constructor
 
   public Transfer(TransferIO io, String logRoot) {
@@ -42,13 +42,13 @@ public class Transfer extends SubsystemBase {
   @Override
   public void periodic() {
     transferIO.updateInputs(transferInputs);
-    Logger.recordOutput(logRoot + "/Inputs/MotorConnected", transferInputs.motorConnected);
-    Logger.recordOutput(logRoot + "/Inputs/AppliedVolts", transferInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "/Inputs/SupplyCurrentAmps", transferInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "/Inputs/ColorSensorTripped", transferInputs.colorSensorTripped);
-    Logger.recordOutput(logRoot + "/TargetVolts", getTargetVoltage());
-    Logger.recordOutput(logRoot + "/BallStaged", ballStaged);
-    Logger.recordOutput(logRoot + "/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/MotorConnected", transferInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/AppliedVolts", transferInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/SupplyCurrentAmps", transferInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/ColorSensorTripped", transferInputs.colorSensorTripped);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/BallStaged", ballStaged);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/State", state.name());
 
     if (DriverStation.isDisabled()) {
       transferIO.stop();

@@ -347,7 +347,10 @@ public class FuelSim {
     /** When true, only fuel on the blue side (x <= field center, left side) is spawned; red side fuel is omitted. */
     protected boolean showHalfFuel = false;
 
-    /** One or two robots; index 0 is the primary (matches legacy {@link #registerRobot}). */
+    /**
+     * Registered robots for collision, intake, and launch; indices match {@link #launchFuel(int, LinearVelocity, Angle, Angle, Transform3d)}
+     * and {@link #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)}.
+     */
     protected final ArrayList<RegisteredFuelRobot> registeredRobots = new ArrayList<>();
 
     protected ArrayList<SimIntake> intakes = new ArrayList<>();
@@ -535,16 +538,13 @@ public class FuelSim {
     } // End setFuelsLogPeriod
 
     /**
-     * Registers a robot with the fuel simulator
-     * @param width from left to right (y-axis)
-     * @param length from front to back (x-axis)
-     * @param bumperHeight
-     * @param poseSupplier
-     * @param fieldSpeedsSupplier field-relative `ChassisSpeeds` supplier
-     */
-    /**
-     * Clears robots and intakes, then registers the primary (index 0) robot. For two robots, call
-     * {@link #addRegisteredRobot} after this and {@link #registerIntake(int, ...)} per robot.
+     * Clears all registered robots and intakes, then registers one robot at index 0.
+     *
+     * @param width robot width (m), left to right in robot frame (Y)
+     * @param length robot length (m), front to back in robot frame (X)
+     * @param bumperHeight bumper collision height (m)
+     * @param poseSupplier field pose of the robot
+     * @param fieldSpeedsSupplier field-relative chassis speeds
      */
     public void registerRobot(
             double width,
@@ -558,7 +558,7 @@ public class FuelSim {
     }
 
     /**
-     * @return index of the added robot (1 for second robot when {@link #registerRobot} was already called)
+     * @return index of the added robot in {@link #registeredRobots} (0-based)
      */
     public int addRegisteredRobot(
             double width,
@@ -658,7 +658,7 @@ public class FuelSim {
     }
 
     /**
-     * @param robotIndex {@link #registerRobot} / {@link #addRegisteredRobot} index for pose and field velocity.
+     * @param robotIndex index into the registered-robot list used for launch pose and field chassis speeds
      */
     public void launchFuel(
             int robotIndex,
@@ -669,11 +669,11 @@ public class FuelSim {
         if (robotIndex < 0 || robotIndex >= registeredRobots.size()) {
             throw new IllegalStateException("Invalid fuel robot index: " + robotIndex);
         }
-        RegisteredFuelRobot r = registeredRobots.get(robotIndex);
+        RegisteredFuelRobot registeredRobot = registeredRobots.get(robotIndex);
 
-        Pose2d robotPose = r.pose.get();
+        Pose2d robotPose = registeredRobot.pose.get();
         Pose3d launchPose = new Pose3d(robotPose).plus(robotToLaunchPoint);
-        ChassisSpeeds fieldSpeeds = r.fieldSpeeds.get();
+        ChassisSpeeds fieldSpeeds = registeredRobot.fieldSpeeds.get();
 
         double horizontalVel = Math.cos(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
         double verticalVel = Math.sin(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
@@ -746,29 +746,29 @@ public class FuelSim {
         if (robotVel.dot(normal) > 0) fuel.addImpulse(new Translation3d(normal.times(robotVel.dot(normal))));
     }
 
-    /** Matches RobotContainer intake: 10.5 in beyond front of frame (robot +X). */
+    /** Intake reach beyond robot front (+X) for broad-phase fuel checks (10.5 in). */
     private static final double kIntakeBeyondFrontMeters = 10.5 * 0.0254;
 
     /**
      * Furthest point on bumpers + extended intake from robot center (robot frame), plus fuel radius
      * and slack — balls outside this field-XY circle skip bumper and intake checks.
      */
-    private static double robotFieldInfluenceRadiusSq(RegisteredFuelRobot r) {
-        double halfL = r.robotLength * 0.5;
-        double halfW = r.robotWidth * 0.5;
+    private static double robotFieldInfluenceRadiusSq(RegisteredFuelRobot registeredRobot) {
+        double halfL = registeredRobot.robotLength * 0.5;
+        double halfW = registeredRobot.robotWidth * 0.5;
         double reach = Math.hypot(halfL + kIntakeBeyondFrontMeters, halfW) + FUEL_RADIUS + 0.15;
         return reach * reach;
     } // End robotFieldInfluenceRadiusSq
 
     protected void handleRobotCollisions(ArrayList<Fuel> fuels) {
-        for (RegisteredFuelRobot r : registeredRobots) {
-            Pose2d robot = r.pose.get();
-            ChassisSpeeds speeds = r.fieldSpeeds.get();
+        for (RegisteredFuelRobot registeredRobot : registeredRobots) {
+            Pose2d robot = registeredRobot.pose.get();
+            ChassisSpeeds speeds = registeredRobot.fieldSpeeds.get();
             Translation2d robotVel = new Translation2d(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
 
             double rx = robot.getX();
             double ry = robot.getY();
-            double reachSq = robotFieldInfluenceRadiusSq(r);
+            double reachSq = robotFieldInfluenceRadiusSq(registeredRobot);
 
             for (Fuel fuel : fuels) {
                 double dx = fuel.pos.getX() - rx;
@@ -776,18 +776,18 @@ public class FuelSim {
                 if (dx * dx + dy * dy > reachSq) {
                     continue;
                 }
-                handleRobotCollision(fuel, robot, robotVel, r.robotWidth, r.robotLength, r.bumperHeight);
+                handleRobotCollision(fuel, robot, robotVel, registeredRobot.robotWidth, registeredRobot.robotLength, registeredRobot.bumperHeight);
             }
         }
     } // End handleRobotCollisions
 
     protected void handleIntakes(ArrayList<Fuel> fuels) {
         for (SimIntake intake : intakes) {
-            RegisteredFuelRobot r = registeredRobots.get(intake.robotIndex);
-            Pose2d robot = r.pose.get();
+            RegisteredFuelRobot registeredRobot = registeredRobots.get(intake.robotIndex);
+            Pose2d robot = registeredRobot.pose.get();
             double rx = robot.getX();
             double ry = robot.getY();
-            double reachSq = robotFieldInfluenceRadiusSq(r);
+            double reachSq = robotFieldInfluenceRadiusSq(registeredRobot);
 
             for (int i = 0; i < fuels.size(); i++) {
                 Fuel fuel = fuels.get(i);
@@ -796,7 +796,7 @@ public class FuelSim {
                 if (dx * dx + dy * dy > reachSq) {
                     continue;
                 }
-                if (intake.shouldIntake(fuel, robot, r.bumperHeight)) {
+                if (intake.shouldIntake(fuel, robot, registeredRobot.bumperHeight)) {
                     fuels.remove(i);
                     i--;
                 }
@@ -845,12 +845,29 @@ public class FuelSim {
         }
     }
 
-    /** Intake for the primary (index 0) fuel robot. */
+    /**
+     * Intake for registered robot index {@code 0}.
+     *
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
+     */
     public void registerIntake(
             double xMin, double xMax, double yMin, double yMax, BooleanSupplier ableToIntake, Runnable intakeCallback) {
         registerIntake(0, xMin, xMax, yMin, yMax, ableToIntake, intakeCallback);
     }
 
+    /**
+     * Adds an intake region in robot frame: when {@code ableToIntake} is true and a fuel lies inside the box
+     * {@code [xMin, xMax] × [yMin, yMax]} (relative X/Y, meters) below {@code bumperHeight}, that fuel is removed and
+     * {@code intakeCallback} runs.
+     *
+     * @param robotIndex registered robot whose pose defines the volume
+     * @param xMin minimum robot-frame X of the region (m)
+     * @param xMax maximum robot-frame X of the region (m)
+     * @param yMin minimum robot-frame Y of the region (m)
+     * @param yMax maximum robot-frame Y of the region (m)
+     * @param ableToIntake whether intake removal is allowed this tick
+     * @param intakeCallback invoked when a fuel is removed by this intake
+     */
     public void registerIntake(
             int robotIndex,
             double xMin,
@@ -863,48 +880,28 @@ public class FuelSim {
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will remove fuel from the field based on the `ableToIntake` parameter.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
-     * @param ableToIntake Should a return a boolean whether the intake is active
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(double xMin, double xMax, double yMin, double yMax, BooleanSupplier ableToIntake) {
         registerIntake(xMin, xMax, yMin, yMax, ableToIntake, () -> {});
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will always remove fuel from the field.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
-     * @param intakeCallback Function to call when a fuel is intaked
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(double xMin, double xMax, double yMin, double yMax, Runnable intakeCallback) {
         registerIntake(xMin, xMax, yMin, yMax, () -> true, intakeCallback);
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will always remove fuel from the field.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(double xMin, double xMax, double yMin, double yMax) {
         registerIntake(xMin, xMax, yMin, yMax, () -> true, () -> {});
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will remove fuel from the field based on the `ableToIntake` parameter.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
-     * @param ableToIntake Should a return a boolean whether the intake is active
-     * @param intakeCallback Function to call when a fuel is intaked
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(
             Distance xMin, Distance xMax, Distance yMin, Distance yMax, BooleanSupplier ableToIntake, Runnable intakeCallback) {
@@ -912,35 +909,21 @@ public class FuelSim {
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will remove fuel from the field based on the `ableToIntake` parameter.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
-     * @param ableToIntake Should a return a boolean whether the intake is active
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(Distance xMin, Distance xMax, Distance yMin, Distance yMax, BooleanSupplier ableToIntake) {
         registerIntake(xMin.in(Meters), xMax.in(Meters), yMin.in(Meters), yMax.in(Meters), ableToIntake);
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will always remove fuel from the field.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
-     * @param intakeCallback Function to call when a fuel is intaked
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(Distance xMin, Distance xMax, Distance yMin, Distance yMax, Runnable intakeCallback) {
         registerIntake(xMin.in(Meters), xMax.in(Meters), yMin.in(Meters), yMax.in(Meters), intakeCallback);
     }
 
     /**
-     * Registers an intake with the fuel simulator. This intake will always remove fuel from the field.
-     * @param xMin Minimum x position for the bounding box
-     * @param xMax Maximum x position for the bounding box
-     * @param yMin Minimum y position for the bounding box
-     * @param yMax Maximum y position for the bounding box
+     * @see #registerIntake(int, double, double, double, double, BooleanSupplier, Runnable)
      */
     public void registerIntake(Distance xMin, Distance xMax, Distance yMin, Distance yMax) {
         registerIntake(xMin.in(Meters), xMax.in(Meters), yMin.in(Meters), yMax.in(Meters));

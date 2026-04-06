@@ -14,8 +14,10 @@ import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.wpilibj.RobotBase;
 
 /**
- * This class defines the runtime mode used by AdvantageKit. The mode is always "real" when running
- * on a roboRIO. Change the value of "simMode" to switch between "sim" (physics sim) and "replay"
+ * This class defines the runtime mode used by AdvantageKit. The mode is always
+ * "real" when running
+ * on a roboRIO. Change the value of "simMode" to switch between "sim" (physics
+ * sim) and "replay"
  * (log replay from a file).
  */
 public final class Constants {
@@ -32,7 +34,8 @@ public final class Constants {
     public static final Distance FULL_WIDTH = FRAME_SIZE_Y.plus(BUMPER_THICKNESS.times(2));
 
     /**
-     * Protrusion past bumpers along robot +X when the extender is fully extended. MapleSim / dyn4j
+     * Protrusion past bumpers along robot +X when the extender is fully extended.
+     * MapleSim / dyn4j
      * chassis collision only; FuelSim uses {@link #FULL_LENGTH} for the robot box.
      */
     public static final double kExtensionPastBumpersMeters = Inches.of(8.696850).in(Meters);
@@ -46,7 +49,8 @@ public final class Constants {
 
   /** Match timing. */
   public static class MatchTiming {
-    private MatchTiming() {}
+    private MatchTiming() {
+    }
 
     /** Driver hang endgame period. */
     public static final double HANG_DRIVER_ENDGAME_SECONDS = 30.0;
@@ -56,9 +60,15 @@ public final class Constants {
   public static class SwerveConstants { // XXX: Tune SwerveConstants, especially TRENCH_ALIGN_TIME_S
     public static final double DEFAULT_DRIVE_SPEED_MPS = 1.6;
     public static final double DEFAULT_ROT_SPEED_RAD_PER_S = 0.75 * 2 * Math.PI;
-    /** From Drive.getMaxLinearSpeedMetersPerSec() (TunerConstants.kSpeedAt12Volts = 4.58 m/s). */
+    /**
+     * From Drive.getMaxLinearSpeedMetersPerSec() (TunerConstants.kSpeedAt12Volts =
+     * 4.58 m/s).
+     */
     public static final double FAST_DRIVE_SPEED_MPS = 4.58;
-    /** From Drive.getMaxAngularSpeedRadPerSec(): max linear / drive base radius. Radius = hypot(9.75, 10.75) in → 0.36866 m. */
+    /**
+     * From Drive.getMaxAngularSpeedRadPerSec(): max linear / drive base radius.
+     * Radius = hypot(9.75, 10.75) in → 0.36866 m.
+     */
     public static final double FAST_ROT_SPEED_RAD_PER_S = 4.58 / 0.36866;
     public static final double TRENCH_ALIGN_TIME_S = 0.5;
     public static final double BUMP_ALIGN_TIME_S = 0.3;
@@ -77,29 +87,33 @@ public final class Constants {
   }
 
   /**
-   * Drive realism for Maple / {@link frc.robot.subsystems.drive.ModuleIOSim} only (that IO is not
-   * used on the real robot).
+   * Maple sim drive tuning shared by {@link frc.robot.subsystems.drive.ModuleIOSim} and {@link
+   * frc.robot.subsystems.drive.ModuleIOSimMapleDirect} so one place controls matched behavior (per-robot speed
+   * randomization stays separate — see {@link frc.robot.subsystems.drive.SimDriveSpeedMultipliers}).
    */
   public static class SimulationDrive {
-    /** Per-module closed-loop drive velocity scale; four wheels get four distinct values in range. */
+    /**
+     * Per-module closed-loop drive velocity scale; four wheels get four distinct values in range (each sim robot bank
+     * draws independently).
+     */
     public static final double kDriveSpeedMultiplierMin = 0.97;
     public static final double kDriveSpeedMultiplierMax = 1.0;
 
     /**
-     * When true (SIM only), spawns a full duplicate robot with Maple + FuelSim + driver OI on {@link
-     * #kSecondSimDriverControllerPort}. The second drivetrain uses {@link
-     * frc.robot.subsystems.drive.ModuleIOSimMapleDirect} (no Phoenix TalonFX in sim) because Phoenix desktop sim
-     * merges all CAN buses: a second {@link frc.robot.subsystems.drive.ModuleIOSim} with the same CAN IDs would alias to
-     * the first robot’s sim devices and couple both robots. There is no Photon vision on robot B; {@link
-     * frc.robot.subsystems.drive.Drive#getPose()} tracks {@code SwerveDriveSimulation#getSimulatedDriveTrainPose()}.
+     * {@link frc.robot.subsystems.drive.ModuleIOSimMapleDirect} scales drive {@code kP} by this at Maple sub-tick rate
+     * to track the same {@link com.ctre.phoenix6.swerve.SwerveModuleConstants} gains as Talon sim without the CTRE
+     * discrete loop.
      */
-    public static final boolean kSecondSimRobotEnabled = true;
+    public static final double kMapleDirectDriveVelocityKpScale = 0.35;
 
-    /** If true, second sim robot uses red-alliance flip and shooter zone logic; if false, blue. */
-    public static final boolean kSecondSimRobotRedAlliance = true;
+    /**
+     * {@link frc.robot.subsystems.drive.ModuleIOSim} steer Talon sim only: replaces tuner steer {@code kD} on Slot0 to
+     * reduce hunting (does not change real-robot config).
+     */
+    public static final double kSteerTalonSimKd = 0.5;
 
-    /** USB port for second sim driver gamepad (mirrors port 0 bindings only). */
-    public static final int kSecondSimDriverControllerPort = 3;
+    /** {@link frc.robot.subsystems.drive.ModuleIOSim} steer Talon sim only: {@code kS} on steer Slot0. */
+    public static final double kSteerTalonSimKs = 0.0;
   }
 
   /** Runtime mode. */

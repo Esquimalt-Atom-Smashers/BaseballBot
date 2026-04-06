@@ -35,7 +35,7 @@ public class Flywheel extends SubsystemBase {
   private double lastSmartDashboardTargetVelocityRpm = Units.radiansPerSecondToRotationsPerMinute(kDefaultTargetVelocityRadPerSec);
 
   public Flywheel(FlywheelIO io) {
-    this(io, "Subsystems/Shooter/Flywheel", "Flywheel");
+    this(io, "", "Flywheel");
   } // End Flywheel Constructor
 
   public Flywheel(FlywheelIO io, String logRoot) {
@@ -60,13 +60,13 @@ public class Flywheel extends SubsystemBase {
   @Override
   public void periodic() {
     flywheelIO.updateInputs(flywheelInputs);
-    Logger.recordOutput(logRoot + "/Inputs/MotorConnected", flywheelInputs.motorConnected);
-    Logger.recordOutput(logRoot + "/Inputs/VelocityRpm", getVelocityRpm());
-    Logger.recordOutput(logRoot + "/Inputs/AppliedVolts", flywheelInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "/Inputs/SupplyCurrentAmps", flywheelInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "/TargetVelocityRpm", getTargetVelocityRpm());
-    Logger.recordOutput(logRoot + "/AtTargetVelocity", atTargetVelocity());
-    Logger.recordOutput(logRoot + "/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/Inputs/MotorConnected", flywheelInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/Inputs/VelocityRpm", getVelocityRpm());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/Inputs/AppliedVolts", flywheelInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/Inputs/SupplyCurrentAmps", flywheelInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/TargetVelocityRpm", getTargetVelocityRpm());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/AtTargetVelocity", atTargetVelocity());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Flywheel/State", state.name());
 
     if (DriverStation.isDisabled()) {
       flywheelIO.stop();
