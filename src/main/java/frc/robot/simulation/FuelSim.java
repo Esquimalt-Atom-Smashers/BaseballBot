@@ -19,6 +19,8 @@ import edu.wpi.first.units.measure.LinearVelocity;
 import java.util.ArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import org.dyn4j.geometry.Vector2;
+import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
 import org.littletonrobotics.junction.Logger;
 
 public class FuelSim {
@@ -27,7 +29,7 @@ public class FuelSim {
     // Room temperature dry air density: https://en.wikipedia.org/wiki/Density_of_air#Dry_air
     protected static final double AIR_DENSITY = 1.2041; // kg/m^3
     /** Ball vs floor/walls/hub geometry — lower = less ping-pong on carpet. */
-    protected static final double FIELD_COR = 0.32; // coefficient of restitution with the field
+    protected static final double FIELD_COR = 0.4; // coefficient of restitution with the field
     protected static final double FUEL_COR = 0.15; // coefficient of restitution with another fuel
     protected static final double NET_COR = 0.2; // coefficient of restitution with the net
     protected static final double ROBOT_COR = 0.08; // coefficient of restitution with a robot
@@ -45,10 +47,24 @@ public class FuelSim {
     protected static final double TRENCH_HEIGHT = 0.565;
     protected static final double TRENCH_BAR_HEIGHT = 0.102;
     protected static final double TRENCH_BAR_WIDTH = 0.152;
-    protected static final double FRICTION = 0.25; // horizontal vel loss per sec while on ground
+    protected static final double FRICTION = 0.2; // horizontal vel loss per sec while on ground
     protected static final double kTangentialWallDamping = 0.65;
     protected static final double kHorizontalSleepSpeedMps = 0.08;
     protected static final double FUEL_MASS = 0.448 * 0.45392; // kgs
+    /**
+     * When FuelSim depenetrates fuel from the Maple chassis, scale of the matching linear impulse on the dyn4j drive
+     * body (0 = fuel-only resolution).
+     */
+    private static final double kMapleFuelReactionCoupling = 0.9;
+    /** Caps Δv from one fuel reaction so dense piles cannot spike Maple velocity. */
+    private static final double kMapleFuelReactionMaxDeltaVMps = 1.0;
+    /**
+     * Fraction of chassis speed along the fuel-departure direction removed per reaction (0..1). Stops wedged
+     * driving + multi-pass separation from acting like an undamped spring (runaway oscillation).
+     */
+    private static final double kMapleFuelInwardVelocityDamp = 0.55;
+    /** Ignore inward damping below this (m/s) to reduce jitter. */
+    private static final double kMapleFuelInwardVelEpsilonMps = 0.03;
     protected static final double FUEL_CROSS_AREA = Math.PI * FUEL_RADIUS * FUEL_RADIUS;
     // Drag coefficient of smooth sphere: https://en.wikipedia.org/wiki/Drag_coefficient#/media/File:14ilf1l.svg
     protected static final double DRAG_COF = 0.47; // dimensionless
@@ -162,6 +178,40 @@ public class FuelSim {
             handleFieldCollisions(subticks);
         }
 
+        /**
+         * Keeps fuel inside field XY. Unconditional clamp fixes tunneling when robot resolution runs after field
+         * collision in the same substep, or when velocity no longer points "into" the wall.
+         */
+        protected void clampFieldEdgesXY() {
+            if (px < FUEL_RADIUS) {
+                px = FUEL_RADIUS;
+                if (vx < 0) {
+                    vx += -(1 + FIELD_COR) * vx;
+                    vy *= kTangentialWallDamping;
+                }
+            } else if (px > FIELD_LENGTH - FUEL_RADIUS) {
+                px = FIELD_LENGTH - FUEL_RADIUS;
+                if (vx > 0) {
+                    vx += -(1 + FIELD_COR) * vx;
+                    vy *= kTangentialWallDamping;
+                }
+            }
+
+            if (py < FUEL_RADIUS) {
+                py = FUEL_RADIUS;
+                if (vy < 0) {
+                    vy += -(1 + FIELD_COR) * vy;
+                    vx *= kTangentialWallDamping;
+                }
+            } else if (py > FIELD_WIDTH - FUEL_RADIUS) {
+                py = FIELD_WIDTH - FUEL_RADIUS;
+                if (vy > 0) {
+                    vy += -(1 + FIELD_COR) * vy;
+                    vx *= kTangentialWallDamping;
+                }
+            }
+        }
+
         protected void handleXZLineCollision(Translation3d lineStart, Translation3d lineEnd) {
             double yMin = Math.min(lineStart.getY(), lineEnd.getY());
             double yMax = Math.max(lineStart.getY(), lineEnd.getY());
@@ -203,26 +253,7 @@ public class FuelSim {
                 handleXZLineCollision(FIELD_XZ_LINE_STARTS[i], FIELD_XZ_LINE_ENDS[i]);
             }
 
-            // edges
-            if (px < FUEL_RADIUS && vx < 0) {
-                px += FUEL_RADIUS - px;
-                vx += -(1 + FIELD_COR) * vx;
-                vy *= kTangentialWallDamping;
-            } else if (px > FIELD_LENGTH - FUEL_RADIUS && vx > 0) {
-                px += FIELD_LENGTH - FUEL_RADIUS - px;
-                vx += -(1 + FIELD_COR) * vx;
-                vy *= kTangentialWallDamping;
-            }
-
-            if (py < FUEL_RADIUS && vy < 0) {
-                py += FUEL_RADIUS - py;
-                vy += -(1 + FIELD_COR) * vy;
-                vx *= kTangentialWallDamping;
-            } else if (py > FIELD_WIDTH - FUEL_RADIUS && vy > 0) {
-                py += FIELD_WIDTH - FUEL_RADIUS - py;
-                vy += -(1 + FIELD_COR) * vy;
-                vx *= kTangentialWallDamping;
-            }
+            clampFieldEdgesXY();
 
             // hubs
             handleHubCollisions(Hub.BLUE_HUB, subticks);
@@ -298,6 +329,15 @@ public class FuelSim {
     private static final double FUEL_CONTACT_DIST_SQ = (FUEL_RADIUS * 2) * (FUEL_RADIUS * 2);
 
     /**
+     * Impulse-based robot resolution plus fuel–fuel can leave overlap; geometric pass + repeats clear it. Low count
+     * keeps CPU bounded.
+     */
+    private static final int kRobotFuelSeparationPasses = 3;
+
+    /** Extra ball–ball resolution after robot pushes (ordering + depenetration). */
+    private static final int kFuelFuelPassesAfterRobot = 2;
+
+    /**
      * On-ground, nearly stationary fuel skips pairwise resolution — settled piles were dominating CPU
      * (dense grid cells × 5 substeps × ~400 bodies).
      */
@@ -308,12 +348,52 @@ public class FuelSim {
         return f.vx * f.vx + f.vy * f.vy + f.vz * f.vz < 0.06 * 0.06;
     } // End isSleepingForBallBall
 
+    /**
+     * Push overlapping fuel apart along center line (no velocity impulse). Used for “sleeping” piles that skipped
+     * resolution entirely and could clip; also safe to call when only depenetration is needed.
+     */
+    private static void separateFuelFuelPositions(Fuel a, Fuel b) {
+        double nx = a.px - b.px;
+        double ny = a.py - b.py;
+        double nz = a.pz - b.pz;
+        double distSq = nx * nx + ny * ny + nz * nz;
+        if (distSq >= FUEL_CONTACT_DIST_SQ) {
+            return;
+        }
+        double distance = Math.sqrt(distSq);
+        if (distance < 1e-9) {
+            nx = 1;
+            ny = 0;
+            nz = 0;
+            distance = 1;
+        } else {
+            nx /= distance;
+            ny /= distance;
+            nz /= distance;
+        }
+        double intersection = FUEL_RADIUS * 2 - distance;
+        if (intersection <= 0) {
+            return;
+        }
+        double halfSep = intersection * 0.5;
+        a.px += nx * halfSep;
+        a.py += ny * halfSep;
+        a.pz += nz * halfSep;
+        b.px -= nx * halfSep;
+        b.py -= ny * halfSep;
+        b.pz -= nz * halfSep;
+    } // End separateFuelFuelPositions
+
     protected static void handleFuelCollision(Fuel a, Fuel b) {
         double nx = a.px - b.px;
         double ny = a.py - b.py;
         double nz = a.pz - b.pz;
-        double distance = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        if (distance == 0) {
+        double distSq = nx * nx + ny * ny + nz * nz;
+        if (distSq >= FUEL_CONTACT_DIST_SQ) {
+            return;
+        }
+        double distance = Math.sqrt(distSq);
+        if (distance < 1e-9) {
             nx = 1;
             ny = 0;
             nz = 0;
@@ -385,16 +465,18 @@ public class FuelSim {
                             if (other == fuel) {
                                 continue;
                             }
-                            if (isSleepingForBallBall(fuel) && isSleepingForBallBall(other)) {
-                                continue;
-                            }
                             double dx = fuel.px - other.px;
                             double dy = fuel.py - other.py;
                             double dz = fuel.pz - other.pz;
                             if (dx * dx + dy * dy + dz * dz >= FUEL_CONTACT_DIST_SQ) {
                                 continue;
                             }
-                            if (fuel.hashCode() < other.hashCode()) {
+                            if (fuel.hashCode() >= other.hashCode()) {
+                                continue;
+                            }
+                            if (isSleepingForBallBall(fuel) && isSleepingForBallBall(other)) {
+                                separateFuelFuelPositions(fuel, other);
+                            } else {
                                 handleFuelCollision(fuel, other);
                             }
                         }
@@ -425,24 +507,28 @@ public class FuelSim {
         final double bumperHeight;
         final Supplier<Pose2d> pose;
         final Supplier<ChassisSpeeds> fieldSpeeds;
+        /** When non-null, fuel depenetration applies matching impulses so Maple feels field fuel. */
+        final SwerveDriveSimulation mapleDrive;
 
         RegisteredFuelRobot(
                 double robotWidth,
                 double robotLength,
                 double bumperHeight,
                 Supplier<Pose2d> pose,
-                Supplier<ChassisSpeeds> fieldSpeeds) {
+                Supplier<ChassisSpeeds> fieldSpeeds,
+                SwerveDriveSimulation mapleDrive) {
             this.robotWidth = robotWidth;
             this.robotLength = robotLength;
             this.bumperHeight = bumperHeight;
             this.pose = pose;
             this.fieldSpeeds = fieldSpeeds;
+            this.mapleDrive = mapleDrive;
         }
     }
     protected int subticks = 2;
 
     /** Publish fuel poses every N robot periods (full array is heavy on NT + AdvantageKit). */
-    private int fuelsLogPeriod = 3;
+    private int fuelsLogPeriod = 1;
     private int fuelsLogCounter = 0;
 
     /**
@@ -574,7 +660,6 @@ public class FuelSim {
     public void start() {
         running = true;
         fuelsLogCounter = 0;
-        logFuels();
     } // End start
 
     /**
@@ -617,9 +702,24 @@ public class FuelSim {
             double bumperHeight,
             Supplier<Pose2d> poseSupplier,
             Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
+        registerRobot(width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier, null);
+    }
+
+    /**
+     * @param mapleDriveSimulation optional Maple dyn4j body; when non-null, fuel depenetration applies opposing linear
+     *     impulses so the drive sim cannot drive through pinned fuel
+     */
+    public void registerRobot(
+            double width,
+            double length,
+            double bumperHeight,
+            Supplier<Pose2d> poseSupplier,
+            Supplier<ChassisSpeeds> fieldSpeedsSupplier,
+            SwerveDriveSimulation mapleDriveSimulation) {
         registeredRobots.clear();
         intakes.clear();
-        registeredRobots.add(new RegisteredFuelRobot(width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier));
+        registeredRobots.add(new RegisteredFuelRobot(
+                width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier, mapleDriveSimulation));
     }
 
     /**
@@ -631,7 +731,22 @@ public class FuelSim {
             double bumperHeight,
             Supplier<Pose2d> poseSupplier,
             Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
-        registeredRobots.add(new RegisteredFuelRobot(width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier));
+        return addRegisteredRobot(width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier, null);
+    }
+
+    /**
+     * @param mapleDriveSimulation optional Maple dyn4j body; when non-null, fuel depenetration applies opposing linear
+     *     impulses on that chassis
+     */
+    public int addRegisteredRobot(
+            double width,
+            double length,
+            double bumperHeight,
+            Supplier<Pose2d> poseSupplier,
+            Supplier<ChassisSpeeds> fieldSpeedsSupplier,
+            SwerveDriveSimulation mapleDriveSimulation) {
+        registeredRobots.add(new RegisteredFuelRobot(
+                width, length, bumperHeight, poseSupplier, fieldSpeedsSupplier, mapleDriveSimulation));
         return registeredRobots.size() - 1;
     }
 
@@ -646,7 +761,24 @@ public class FuelSim {
                 length.in(Meters),
                 bumperHeight.in(Meters),
                 poseSupplier,
-                fieldSpeedsSupplier);
+                fieldSpeedsSupplier,
+                null);
+    }
+
+    public void registerRobot(
+            Distance width,
+            Distance length,
+            Distance bumperHeight,
+            Supplier<Pose2d> poseSupplier,
+            Supplier<ChassisSpeeds> fieldSpeedsSupplier,
+            SwerveDriveSimulation mapleDriveSimulation) {
+        registerRobot(
+                width.in(Meters),
+                length.in(Meters),
+                bumperHeight.in(Meters),
+                poseSupplier,
+                fieldSpeedsSupplier,
+                mapleDriveSimulation);
     }
 
     public int addRegisteredRobot(
@@ -660,7 +792,24 @@ public class FuelSim {
                 length.in(Meters),
                 bumperHeight.in(Meters),
                 poseSupplier,
-                fieldSpeedsSupplier);
+                fieldSpeedsSupplier,
+                null);
+    }
+
+    public int addRegisteredRobot(
+            Distance width,
+            Distance length,
+            Distance bumperHeight,
+            Supplier<Pose2d> poseSupplier,
+            Supplier<ChassisSpeeds> fieldSpeedsSupplier,
+            SwerveDriveSimulation mapleDriveSimulation) {
+        return addRegisteredRobot(
+                width.in(Meters),
+                length.in(Meters),
+                bumperHeight.in(Meters),
+                poseSupplier,
+                fieldSpeedsSupplier,
+                mapleDriveSimulation);
     }
 
     /**
@@ -685,8 +834,34 @@ public class FuelSim {
             handleFuelCollisions(fuels);
 
             if (!registeredRobots.isEmpty()) {
-                handleRobotCollisions(fuels);
+                for (int pass = 0; pass < kRobotFuelSeparationPasses; pass++) {
+                    handleRobotCollisions(fuels);
+                    for (RegisteredFuelRobot rr : registeredRobots) {
+                        Pose2d robot = rr.pose.get();
+                        double rx = robot.getX();
+                        double ry = robot.getY();
+                        double reachSq = robotFieldInfluenceRadiusSq(rr);
+                        for (Fuel fuel : fuels) {
+                            double dx = fuel.px - rx;
+                            double dy = fuel.py - ry;
+                            if (dx * dx + dy * dy > reachSq) {
+                                continue;
+                            }
+                            geometricSeparateFuelFromRobot(fuel, rr);
+                        }
+                    }
+                    for (Fuel fuel : fuels) {
+                        fuel.clampFieldEdgesXY();
+                    }
+                }
+                for (int fp = 0; fp < kFuelFuelPassesAfterRobot; fp++) {
+                    handleFuelCollisions(fuels);
+                }
                 handleIntakes(fuels);
+            } else {
+                for (Fuel fuel : fuels) {
+                    fuel.clampFieldEdgesXY();
+                }
             }
         }
 
@@ -764,14 +939,202 @@ public class FuelSim {
                 new Transform3d(new Translation3d(0, 0, launchHeight.in(Meters)), Rotation3d.kZero));
     }
 
+    private static void clampFuelXYPositionOnly(Fuel f) {
+        f.px = Math.max(FUEL_RADIUS, Math.min(FIELD_LENGTH - FUEL_RADIUS, f.px));
+        f.py = Math.max(FUEL_RADIUS, Math.min(FIELD_WIDTH - FUEL_RADIUS, f.py));
+    } // End clampFuelXYPositionOnly
+
+    /** True when low fuel center circle overlaps the robot bumper footprint in field XY (ignores Z above bumper). */
+    private static boolean fuelOverlapsRobotBumperFootprint(Fuel fuel, RegisteredFuelRobot rr) {
+        if (fuel.pz > rr.bumperHeight) {
+            return false;
+        }
+        Pose2d robot = rr.pose.get();
+        double halfL = rr.robotLength * 0.5;
+        double halfW = rr.robotWidth * 0.5;
+        double cx = robot.getX();
+        double cy = robot.getY();
+        double theta = robot.getRotation().getRadians();
+        double cos = Math.cos(theta);
+        double sin = Math.sin(theta);
+        double odx = fuel.px - cx;
+        double ody = fuel.py - cy;
+        double relX = odx * cos + ody * sin;
+        double relY = -odx * sin + ody * cos;
+        double qx = Math.max(-halfL, Math.min(halfL, relX));
+        double qy = Math.max(-halfW, Math.min(halfW, relY));
+        double ddx = relX - qx;
+        double ddy = relY - qy;
+        double rSq = FUEL_RADIUS * FUEL_RADIUS;
+        return ddx * ddx + ddy * ddy < rSq - 1e-10;
+    } // End fuelOverlapsRobotBumperFootprint
+
+    /**
+     * Pinned against a perimeter wall, fuel cannot move normal to the wall (real ball “acts like” part of the wall).
+     * If geometric separation would leave overlap after clamping XY, slide along the wall to clear the robot.
+     */
+    private static void slideFuelAlongWallToClearRobot(Fuel fuel, RegisteredFuelRobot rr) {
+        final double step = 0.035;
+        final int maxSteps = 48;
+        double px0 = fuel.px;
+        double py0 = fuel.py;
+        for (int sign : new int[] {1, -1}) {
+            fuel.px = px0;
+            fuel.py = py0;
+            for (int i = 0; i < maxSteps; i++) {
+                fuel.py += sign * step;
+                clampFuelXYPositionOnly(fuel);
+                if (!fuelOverlapsRobotBumperFootprint(fuel, rr)) {
+                    return;
+                }
+            }
+        }
+        for (int sign : new int[] {1, -1}) {
+            fuel.px = px0;
+            fuel.py = py0;
+            for (int i = 0; i < maxSteps; i++) {
+                fuel.px += sign * step;
+                clampFuelXYPositionOnly(fuel);
+                if (!fuelOverlapsRobotBumperFootprint(fuel, rr)) {
+                    return;
+                }
+            }
+        }
+    } // End slideFuelAlongWallToClearRobot
+
+    /**
+     * Applies a linear impulse on the Maple drive body opposite to fuel XY depenetration so pinned fuel resists the
+     * chassis instead of only moving the FuelSim particle.
+     */
+    private void applyMapleReactionFromFuelWorldDisplacement(RegisteredFuelRobot rr, double dpx, double dpy) {
+        if (rr.mapleDrive == null) {
+            return;
+        }
+        double distSq = dpx * dpx + dpy * dpy;
+        if (distSq < 1e-16) {
+            return;
+        }
+        double dist = Math.sqrt(distSq);
+        double ux = dpx / dist;
+        double uy = dpy / dist;
+
+        double dtSub = PERIOD / Math.max(1, subticks);
+        double robotMass = rr.mapleDrive.getMass().getMass();
+        double maxMag = robotMass * kMapleFuelReactionMaxDeltaVMps * dtSub;
+
+        // Several separation passes run per substep; full displacement impulse each pass over-counts contact force
+        // and feeds energy into the chassis–controller loop.
+        double scale = (FUEL_MASS * kMapleFuelReactionCoupling) / dtSub / kRobotFuelSeparationPasses;
+        Vector2 impulse = new Vector2(-dpx * scale, -dpy * scale);
+        if (impulse.getMagnitudeSquared() > maxMag * maxMag) {
+            impulse.setMagnitude(maxMag);
+        }
+        rr.mapleDrive.applyImpulse(impulse);
+
+        Vector2 v = rr.mapleDrive.getLinearVelocity();
+        double vin = v.x * ux + v.y * uy;
+        if (vin > kMapleFuelInwardVelEpsilonMps) {
+            double dampMag = robotMass * vin * kMapleFuelInwardVelocityDamp;
+            if (dampMag > maxMag) {
+                dampMag = maxMag;
+            }
+            rr.mapleDrive.applyImpulse(new Vector2(-ux * dampMag, -uy * dampMag));
+        }
+    } // End applyMapleReactionFromFuelWorldDisplacement
+
+    /**
+     * Hard positional separation: fuel center must stay at least {@link #FUEL_RADIUS} from the robot XY bumper
+     * rectangle (circle vs AABB). Fixes overlap left by a single impulse pass, corners, and clamp-vs-robot ordering.
+     * When the MTD would leave the field, {@link #clampFuelXYPositionOnly} pins the ball on the wall; we then slide
+     * along the wall so the ball stays a solid obstacle (no clipping through perimeter; robot must “go around”).
+     */
+    private void geometricSeparateFuelFromRobot(Fuel fuel, RegisteredFuelRobot rr) {
+        if (fuel.pz > rr.bumperHeight) {
+            return;
+        }
+
+        double px0 = fuel.px;
+        double py0 = fuel.py;
+
+        Pose2d robot = rr.pose.get();
+        double halfL = rr.robotLength * 0.5;
+        double halfW = rr.robotWidth * 0.5;
+        double cx = robot.getX();
+        double cy = robot.getY();
+        double theta = robot.getRotation().getRadians();
+        double cos = Math.cos(theta);
+        double sin = Math.sin(theta);
+
+        double odx = fuel.px - cx;
+        double ody = fuel.py - cy;
+        double relX = odx * cos + ody * sin;
+        double relY = -odx * sin + ody * cos;
+
+        double qx = Math.max(-halfL, Math.min(halfL, relX));
+        double qy = Math.max(-halfW, Math.min(halfW, relY));
+        double ddx = relX - qx;
+        double ddy = relY - qy;
+        double distSq = ddx * ddx + ddy * ddy;
+        double r = FUEL_RADIUS;
+        double rSq = r * r;
+        if (distSq >= rSq - 1e-14) {
+            return;
+        }
+
+        if (distSq < 1e-16) {
+            double best = Double.MAX_VALUE;
+            double ux = 0;
+            double uy = 0;
+            double mag = halfL + r - relX;
+            if (mag >= 0 && mag < best) {
+                best = mag;
+                ux = 1;
+                uy = 0;
+            }
+            mag = relX + halfL + r;
+            if (mag >= 0 && mag < best) {
+                best = mag;
+                ux = -1;
+                uy = 0;
+            }
+            mag = halfW + r - relY;
+            if (mag >= 0 && mag < best) {
+                best = mag;
+                ux = 0;
+                uy = 1;
+            }
+            mag = relY + halfW + r;
+            if (mag >= 0 && mag < best) {
+                best = mag;
+                ux = 0;
+                uy = -1;
+            }
+            if (best < Double.MAX_VALUE) {
+                relX += ux * best;
+                relY += uy * best;
+            }
+        } else {
+            double dist = Math.sqrt(distSq);
+            double push = r - dist;
+            relX += (ddx / dist) * push;
+            relY += (ddy / dist) * push;
+        }
+
+        fuel.px = cx + relX * cos - relY * sin;
+        fuel.py = cy + relX * sin + relY * cos;
+        clampFuelXYPositionOnly(fuel);
+        if (fuelOverlapsRobotBumperFootprint(fuel, rr)) {
+            slideFuelAlongWallToClearRobot(fuel, rr);
+        }
+        applyMapleReactionFromFuelWorldDisplacement(rr, fuel.px - px0, fuel.py - py0);
+    } // End geometricSeparateFuelFromRobot
+
     protected void handleRobotCollision(
-            Fuel fuel,
-            Pose2d robot,
-            Translation2d robotVel,
-            double robotWidth,
-            double robotLength,
-            double bumperHeight) {
-        if (fuel.pz > bumperHeight) return;
+            Fuel fuel, RegisteredFuelRobot rr, Pose2d robot, Translation2d robotVel) {
+        if (fuel.pz > rr.bumperHeight) return;
+
+        double robotWidth = rr.robotWidth;
+        double robotLength = rr.robotLength;
 
         double odx = fuel.px - robot.getX();
         double ody = fuel.py - robot.getY();
@@ -814,6 +1177,7 @@ public class FuelSim {
         double fieldDy = ox * sin + oy * cos;
         fuel.px += fieldDx;
         fuel.py += fieldDy;
+        applyMapleReactionFromFuelWorldDisplacement(rr, fieldDx, fieldDy);
 
         double olen = Math.hypot(ox, oy);
         if (olen < 1e-9) return;
@@ -863,7 +1227,7 @@ public class FuelSim {
                 if (dx * dx + dy * dy > reachSq) {
                     continue;
                 }
-                handleRobotCollision(fuel, robot, robotVel, registeredRobot.robotWidth, registeredRobot.robotLength, registeredRobot.bumperHeight);
+                handleRobotCollision(fuel, registeredRobot, robot, robotVel);
             }
         }
     } // End handleRobotCollisions

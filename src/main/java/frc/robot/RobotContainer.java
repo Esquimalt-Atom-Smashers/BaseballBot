@@ -236,7 +236,7 @@ public class RobotContainer {
 
 				int fuelRobotIndex = 0;
 				if (fuelSimEnabled) {
-					fuelRobotIndex = registerFuelSimRobotBody(drive, false);
+					fuelRobotIndex = registerFuelSimRobotBody(drive, false, driveSimulation);
 				}
 
 				// Shooter Sim Visualizer
@@ -953,8 +953,13 @@ public class RobotContainer {
 				.ignoringDisable(true));
   } // End configureFuelSim
 
-	/** Register a robot for collision with fuel. */
-	private int registerFuelSimRobotBody(Drive driveForFuel, boolean additionalRobotSlot) {
+	/**
+	 * Register a robot for collision with fuel.
+	 *
+	 * @param mapleDriveSimulation Maple dyn4j chassis for that robot; FuelSim applies opposing impulses when fuel is
+	 *     depenetrated (must be the same instance used for pose/speed suppliers’ sim)
+	 */
+	private int registerFuelSimRobotBody(Drive driveForFuel, boolean additionalRobotSlot, SwerveDriveSimulation mapleDriveSimulation) {
 		double robotWidthMeters = Constants.Dimensions.FULL_WIDTH.in(Meters);
 		double robotLengthMeters = Constants.Dimensions.FULL_LENGTH.in(Meters);
 		double bumperHeightMeters = Constants.Dimensions.BUMPER_HEIGHT.in(Meters);
@@ -966,14 +971,14 @@ public class RobotContainer {
 					robotLengthMeters,
 					bumperHeightMeters,
 					driveForFuel::getPose,
-					driveForFuel::getFieldRelativeChassisSpeeds);
+					driveForFuel::getFieldRelativeChassisSpeeds, mapleDriveSimulation);
 		}
 		fuelSim.registerRobot(
 				robotWidthMeters,
 				robotLengthMeters,
 				bumperHeightMeters,
 				driveForFuel::getPose,
-				driveForFuel::getFieldRelativeChassisSpeeds);
+				driveForFuel::getFieldRelativeChassisSpeeds, mapleDriveSimulation);
 		return 0;
 	} // End registerFuelSimRobotBody
 
@@ -1153,7 +1158,7 @@ public class RobotContainer {
 
 		int fuelRobotIndex = 0;
 		if (fuelSimEnabled) {
-			fuelRobotIndex = registerFuelSimRobotBody(secondSimRobot.drive, true);
+			fuelRobotIndex = registerFuelSimRobotBody(secondSimRobot.drive, true, secondSimRobot.driveSimulation);
 		}
 
 		// Shooter Sim Visualizer
