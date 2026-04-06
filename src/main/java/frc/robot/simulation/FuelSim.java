@@ -349,7 +349,7 @@ public class FuelSim {
     } // End isSleepingForBallBall
 
     /**
-     * Push overlapping fuel apart along center line (no velocity impulse). Used for “sleeping” piles that skipped
+     * Push overlapping fuel apart along center line (no velocity impulse). Used for "sleeping" piles that skipped
      * resolution entirely and could clip; also safe to call when only depenetration is needed.
      */
     private static void separateFuelFuelPositions(Fuel a, Fuel b) {
@@ -970,7 +970,7 @@ public class FuelSim {
     } // End fuelOverlapsRobotBumperFootprint
 
     /**
-     * Pinned against a perimeter wall, fuel cannot move normal to the wall (real ball “acts like” part of the wall).
+     * Pinned against a perimeter wall, fuel cannot move normal to the wall (real ball "acts like" part of the wall).
      * If geometric separation would leave overlap after clamping XY, slide along the wall to clear the robot.
      */
     private static void slideFuelAlongWallToClearRobot(Fuel fuel, RegisteredFuelRobot rr) {
@@ -1046,7 +1046,7 @@ public class FuelSim {
      * Hard positional separation: fuel center must stay at least {@link #FUEL_RADIUS} from the robot XY bumper
      * rectangle (circle vs AABB). Fixes overlap left by a single impulse pass, corners, and clamp-vs-robot ordering.
      * When the MTD would leave the field, {@link #clampFuelXYPositionOnly} pins the ball on the wall; we then slide
-     * along the wall so the ball stays a solid obstacle (no clipping through perimeter; robot must “go around”).
+     * along the wall so the ball stays a solid obstacle (no clipping through perimeter; robot must "go around").
      */
     private void geometricSeparateFuelFromRobot(Fuel fuel, RegisteredFuelRobot rr) {
         if (fuel.pz > rr.bumperHeight) {
