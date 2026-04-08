@@ -1732,6 +1732,314 @@
       }
     },
     {
+      "name": "Sim Robot Setup",
+      "grid_layout": {
+        "layouts": [
+          {
+            "title": "SimFullFieldExtraRobots",
+            "x": 950.0,
+            "y": 0.0,
+            "width": 190.0,
+            "height": 190.0,
+            "type": "List Layout",
+            "properties": {
+              "label_position": "TOP"
+            },
+            "children": [
+              {
+                "title": "Enabled",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "Toggle Switch",
+                "properties": {
+                  "topic": "/SmartDashboard/SimFullFieldExtraRobots/Enabled",
+                  "period": 0.06,
+                  "data_type": "boolean"
+                }
+              }
+            ]
+          },
+          {
+            "title": "Starting Pose (No Secondary Robot)",
+            "x": 0.0,
+            "y": 380.0,
+            "width": 380.0,
+            "height": 475.0,
+            "type": "List Layout",
+            "properties": {
+              "label_position": "TOP"
+            },
+            "children": [
+              {
+                "title": "Blue-2",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Blue-2",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Blue-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Blue-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-1",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-1",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-2",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-2",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              }
+            ]
+          },
+          {
+            "title": "Starting Pose (Second on Blue)",
+            "x": 380.0,
+            "y": 380.0,
+            "width": 380.0,
+            "height": 475.0,
+            "type": "List Layout",
+            "properties": {
+              "label_position": "TOP"
+            },
+            "children": [
+              {
+                "title": "Blue-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Blue-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-1",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-1",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-2",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-2",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              }
+            ]
+          },
+          {
+            "title": "Starting Pose (Second on Red)",
+            "x": 760.0,
+            "y": 380.0,
+            "width": 380.0,
+            "height": 475.0,
+            "type": "List Layout",
+            "properties": {
+              "label_position": "TOP"
+            },
+            "children": [
+              {
+                "title": "Blue-2",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Blue-2",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Blue-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Blue-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-2",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-2",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              },
+              {
+                "title": "Red-3",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 190.0,
+                "height": 190.0,
+                "type": "ComboBox Chooser",
+                "properties": {
+                  "topic": "/SmartDashboard/SimStartingPose/Red-3",
+                  "period": 0.06,
+                  "sort_options": false
+                }
+              }
+            ]
+          }
+        ],
+        "containers": [
+          {
+            "title": "Second Sim Robot",
+            "x": 380.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 190.0,
+            "type": "ComboBox Chooser",
+            "properties": {
+              "topic": "/SmartDashboard/Second Sim Robot",
+              "period": 0.06,
+              "sort_options": false
+            }
+          },
+          {
+            "title": "Set Sim Starting Poses",
+            "x": 0.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 190.0,
+            "type": "Toggle Button",
+            "properties": {
+              "topic": "/SmartDashboard/SimStartingPoses/Apply",
+              "period": 0.06,
+              "data_type": "boolean"
+            }
+          },
+          {
+            "title": "ResetToDefaults",
+            "x": 760.0,
+            "y": 0.0,
+            "width": 190.0,
+            "height": 190.0,
+            "type": "Toggle Button",
+            "properties": {
+              "topic": "/SmartDashboard/SimStartingPoses/ResetToDefaults",
+              "period": 0.06,
+              "data_type": "boolean"
+            }
+          },
+          {
+            "title": "Starting Pose (Primary-Robot)",
+            "x": 0.0,
+            "y": 190.0,
+            "width": 380.0,
+            "height": 190.0,
+            "type": "ComboBox Chooser",
+            "properties": {
+              "topic": "/SmartDashboard/SimStartingPose/Primary-Robot",
+              "period": 0.06,
+              "sort_options": false
+            }
+          },
+          {
+            "title": "Second-Sim",
+            "x": 380.0,
+            "y": 190.0,
+            "width": 380.0,
+            "height": 190.0,
+            "type": "ComboBox Chooser",
+            "properties": {
+              "topic": "/SmartDashboard/SimStartingPose/Second-Sim",
+              "period": 0.06,
+              "sort_options": false
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Subsystem and Shooting Test (Vertical Display)",
       "grid_layout": {
         "layouts": [
@@ -2268,8 +2576,8 @@
           },
           {
             "title": "Shooter Tuner",
-            "x": 855.0,
-            "y": 0.0,
+            "x": 285.0,
+            "y": 1140.0,
             "width": 285.0,
             "height": 285.0,
             "type": "List Layout",
@@ -2462,7 +2770,7 @@
           {
             "title": "Operator Override",
             "x": 855.0,
-            "y": 285.0,
+            "y": 0.0,
             "width": 190.0,
             "height": 190.0,
             "type": "Boolean Box",
