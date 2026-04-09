@@ -230,7 +230,7 @@ public class RobotContainer {
 				turret 	 = new Turret(new TurretIOSim());
 				hood 		 = new Hood(new HoodIOSim());
 				flywheel = new Flywheel(new FlywheelIOSim());
-				candle   = new CANdle(new CANdleIO() {});
+				candle   = new CANdle(new CANdleIOSim());
 				hang 		 = new Hang(new HangIOSim());
 
 				// Shooter Sim Visualizer

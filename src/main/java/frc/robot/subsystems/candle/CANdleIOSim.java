@@ -19,10 +19,7 @@ import com.ctre.phoenix6.signals.StripTypeValue;
 import static frc.robot.subsystems.candle.CANdleConstants.*;
 import java.util.Objects;
 
-public class CANdleIOLEDs implements CANdleIO {
-
-  private final CANdle candle;
-  
+public class CANdleIOSim implements CANdleIO {
   private AnimationType targetAnimationType = AnimationType.None;
   private AnimationType currentAnimationType = AnimationType.None;
 
@@ -32,16 +29,7 @@ public class CANdleIOLEDs implements CANdleIO {
   private int startIndex = kFirstLED;
   private int endIndex = kEndLED;
 
-  public CANdleIOLEDs() {
-    candle = new CANdle(kDeviceID);
-
-    CANdleConfiguration config = new CANdleConfiguration();
-    config.LED.StripType = StripTypeValue.GRB;
-    config.LED.BrightnessScalar = kDefaultBrightness;
-    config.CANdleFeatures.StatusLedWhenActive = StatusLedWhenActiveValue.Disabled;
-
-    candle.getConfigurator().apply(config);
-
+  public CANdleIOSim() {
     // Ensure deterministic startup state (known-off) before any commands call setLEDColor/setLEDAnimation.
     clear();
   } // End CANdleIOLEDs Constructor
@@ -51,8 +39,6 @@ public class CANdleIOLEDs implements CANdleIO {
     if (currentAnimationType != targetAnimationType || !Objects.equals(currentColor, targetColor)) {
       currentAnimationType = targetAnimationType;
       currentColor = targetColor;
-
-      setLEDAnimation();
     }
 
     inputs.currentAnimationType = currentAnimationType;
@@ -64,69 +50,8 @@ public class CANdleIOLEDs implements CANdleIO {
     inputs.endLEDIndex = endIndex;
   } // End updateInputs
 
-  /** Sets the LED animation on the CANdle. */
-  private void setLEDAnimation() {
-    switch (currentAnimationType) {
-      default:
-      case None:
-        setLEDColor(currentColor);
-        break;
-      case ColorFlow:
-        candle.setControl(
-          new ColorFlowAnimation(startIndex, endIndex).withSlot(0)
-            .withColor(currentColor)
-        );
-        break;
-      case Rainbow:
-        candle.setControl(
-          new RainbowAnimation(startIndex, endIndex).withSlot(0)
-        );
-        break;
-      case Strobe:
-        candle.setControl(
-            new StrobeAnimation(startIndex, endIndex).withSlot(0)
-                .withColor(currentColor)
-        );
-        break;
-      case SingleFade:
-        candle.setControl(
-            new SingleFadeAnimation(startIndex, endIndex).withSlot(0)
-                .withColor(currentColor)
-        );
-        break;
-      case RgbFade:
-        candle.setControl(
-            new RgbFadeAnimation(startIndex, endIndex).withSlot(0)
-        );
-        break;
-      case Twinkle:
-        candle.setControl(
-          new TwinkleAnimation(startIndex, endIndex).withSlot(0)
-            .withColor(currentColor)
-        );
-        break;
-      case TwinkleOff:
-        candle.setControl(
-          new TwinkleOffAnimation(startIndex, endIndex).withSlot(0)
-            .withColor(currentColor)
-        );
-        break;
-      case Larson:
-        candle.setControl(
-          new LarsonAnimation(startIndex, endIndex).withSlot(0)
-            .withColor(currentColor)
-        );
-        break;
-      case Fire:
-        candle.setControl(
-          new FireAnimation(startIndex, endIndex).withSlot(0)
-        );
-        break;
-    }
-  } // End setLEDAnimation
-
   private void setLEDColor(RGBWColor color) {
-    candle.setControl(new SolidColor(startIndex, endIndex).withColor(color));
+    // Nothing to set (yet...)
   } // End setLEDColor
 
   @Override
