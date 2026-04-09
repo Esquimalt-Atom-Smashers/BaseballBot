@@ -148,6 +148,8 @@ public class RobotContainer {
 
 	// Drive Simulation
 	private SwerveDriveSimulation driveSimulation = null;
+	/** Last extender state used for dyn4j bumper footprint (SIM only). */
+	private boolean driveSimCollisionExtenderExtended = false;
 
 	// Fuel Simulation (robot-ball collision in SIM)
 	private final FuelSim fuelSim = new FuelSim();
@@ -207,7 +209,7 @@ public class RobotContainer {
         SimulatedArena.overrideInstance(new frc.robot.simulation.Arena2026Rebuilt(true));
 
 				driveSimulation = new SwerveDriveSimulation(Drive.mapleSimConfig, new Pose2d(3, 3, new Rotation2d()));
-				applyRearGapToDriveCollision(driveSimulation);
+				applyRearGapToDriveCollision(driveSimulation, 0.0);
 				SimulatedArena.getInstance().addDriveTrainSimulation(driveSimulation);
 				drive = new Drive(
 						new GyroIOSim(driveSimulation.getGyroSimulation()),
@@ -254,7 +256,11 @@ public class RobotContainer {
 				if (fuelSimEnabled) {
 					configureFuelSim();
 					Runnable intakeFuelCallback = shooterSim != null ? shooterSim::intakeFuel : () -> {};
-					configureFuelSimRobot(() -> extender.getState() == Extender.State.EXTENDED, intakeFuelCallback);
+					configureFuelSimRobot(
+							() ->
+									extender.getState() == Extender.State.EXTENDED
+											&& (shooterSim == null || shooterSim.canIntake()),
+							intakeFuelCallback);
 				}
 				break;
 
@@ -758,11 +764,13 @@ public class RobotContainer {
 
 	/**
 	 * Updates the dyn4j chassis collision footprint for the MapleSim drive sim so the rear bumper
-	 * has a centered opening.
+	 * has a centered opening. Optional {@code frontExtensionBeyondBumpersM} lengthens the hull in
+	 * +X when the extender is extended ({@link Constants.Dimensions#kExtensionPastBumpersMeters}).
 	 *
 	 * This only affects the drive simulation collision detection (not FuelSim).
 	 */
-	private static void applyRearGapToDriveCollision(SwerveDriveSimulation driveSimulation) {
+	private static void applyRearGapToDriveCollision(
+			SwerveDriveSimulation driveSimulation, double frontExtensionBeyondBumpersM) {
 		// MapleSim / dyn4j dimensions are meters.
 		double bumperLengthX = Constants.Dimensions.FULL_LENGTH.in(Meters);
 		double bumperWidthY = Constants.Dimensions.FULL_WIDTH.in(Meters);
@@ -791,11 +799,13 @@ public class RobotContainer {
 		// - a right rear strip
 		driveSimulation.removeAllFixtures();
 
-		// Front rectangle: x in [-halfLenX + gapDepthX, +halfLenX]
-		double frontWidthX = bumperLengthX - gapDepthX;
-		double frontCenterX = gapDepthX / 2.0; // midpoint of [-halfLenX + gapDepthX, +halfLenX]
+		// Front rectangle: x in [-halfLenX + gapDepthX, +halfLenX + frontExtensionBeyondBumpersM]
+		double frontLeftX = -halfLenX + gapDepthX;
+		double frontRightX = halfLenX + frontExtensionBeyondBumpersM;
+		double frontWidthX = frontRightX - frontLeftX;
+		double frontCenterX = (frontLeftX + frontRightX) * 0.5;
 		Rectangle front = new Rectangle(frontWidthX, bumperWidthY);
-		front.translate(frontCenterX, 0.0);
+		front.translate(frontCenterX, 0);
 		BodyFixture frontFixture = new BodyFixture(front);
 		frontFixture.setFriction(AbstractDriveTrainSimulation.BUMPER_COEFFICIENT_OF_FRICTION);
 		frontFixture.setRestitution(AbstractDriveTrainSimulation.BUMPER_COEFFICIENT_OF_RESTITUTION);
@@ -865,13 +875,21 @@ public class RobotContainer {
 				robotLengthMeters / 2 + intakeExtendMeters,
 				-robotWidthMeters / 2 + intakeInsetMeters,
 				robotWidthMeters / 2 - intakeInsetMeters,
-				() -> extender.getState() == Extender.State.EXTENDED,
+				() -> ableToIntake.getAsBoolean() && intake.getState() == Intake.State.INTAKING,
 				intakeCallback);
 	} // End configureFuelSimRobot
 
   /** Update the Simulation world. Should be called from Robot.simulationPeriodic(). Only works in SIM mode. */
 	public void updateSimulation() {
 		if (Constants.currentMode != Constants.Mode.SIM) return;
+
+		boolean extenderExtendedForCollision = extender.getState() == Extender.State.EXTENDED;
+		if (extenderExtendedForCollision != driveSimCollisionExtenderExtended) {
+			driveSimCollisionExtenderExtended = extenderExtendedForCollision;
+			applyRearGapToDriveCollision(
+					driveSimulation,
+					extenderExtendedForCollision ? Constants.Dimensions.kExtensionPastBumpersMeters : 0.0);
+		}
 
 		SimulatedArena.getInstance().simulationPeriodic();
 

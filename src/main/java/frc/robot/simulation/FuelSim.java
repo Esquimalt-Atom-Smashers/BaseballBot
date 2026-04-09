@@ -243,6 +243,23 @@ public class FuelSim {
         }
     }
 
+    /** Squared diameter for ball–ball proximity (avoids sqrt in hot loop). */
+    private static final double FUEL_CONTACT_DIST_SQ = (FUEL_RADIUS * 2) * (FUEL_RADIUS * 2);
+
+    /**
+     * On-ground, nearly stationary fuel skips pairwise resolution — settled piles were dominating CPU
+     * (dense grid cells × 5 substeps × ~400 bodies).
+     */
+    private static boolean isSleepingForBallBall(Fuel f) {
+        if (f.pos.getZ() > FUEL_RADIUS + 0.06) {
+            return false;
+        }
+        double vx = f.vel.getX();
+        double vy = f.vel.getY();
+        double vz = f.vel.getZ();
+        return vx * vx + vy * vy + vz * vz < 0.06 * 0.06;
+    } // End isSleepingForBallBall
+
     protected static void handleFuelCollision(Fuel a, Fuel b) {
         Translation3d normal = a.pos.minus(b.pos);
         double distance = normal.getNorm();
@@ -274,6 +291,10 @@ public class FuelSim {
         }
         activeCells.clear();
 
+        if (fuels.size() < 2) {
+            return;
+        } // End early exit no pairs
+
         // Populate grid
         for (Fuel fuel : fuels) {
             int col = (int) (fuel.pos.getX() / CELL_SIZE);
@@ -297,10 +318,20 @@ public class FuelSim {
                 for (int j = row - 1; j <= row + 1; j++) {
                     if (i >= 0 && i < GRID_COLS && j >= 0 && j < GRID_ROWS) {
                         for (Fuel other : grid[i][j]) {
-                            if (fuel != other && fuel.pos.getDistance(other.pos) < FUEL_RADIUS * 2) {
-                                if (fuel.hashCode() < other.hashCode()) {
-                                    handleFuelCollision(fuel, other);
-                                }
+                            if (other == fuel) {
+                                continue;
+                            }
+                            if (isSleepingForBallBall(fuel) && isSleepingForBallBall(other)) {
+                                continue;
+                            }
+                            double dx = fuel.pos.getX() - other.pos.getX();
+                            double dy = fuel.pos.getY() - other.pos.getY();
+                            double dz = fuel.pos.getZ() - other.pos.getZ();
+                            if (dx * dx + dy * dy + dz * dz >= FUEL_CONTACT_DIST_SQ) {
+                                continue;
+                            }
+                            if (fuel.hashCode() < other.hashCode()) {
+                                handleFuelCollision(fuel, other);
                             }
                         }
                     }
@@ -321,7 +352,11 @@ public class FuelSim {
     protected double robotLength; // size along the robot's x axis
     protected double bumperHeight;
     protected ArrayList<SimIntake> intakes = new ArrayList<>();
-    protected int subticks = 5;
+    protected int subticks = 2;
+
+    /** Publish fuel poses every N robot periods (full array is heavy on NT + AdvantageKit). */
+    private int fuelsLogPeriod = 3;
+    private int fuelsLogCounter = 0;
 
     /**
      * Creates a new instance of FuelSim
@@ -428,17 +463,31 @@ public class FuelSim {
      * at RealOutputs/FieldSimulation/Fuels for AdvantageScope visualization.
      */
     public void logFuels() {
-        Translation3d[] positions = fuels.stream().map((fuel) -> fuel.pos).toArray(Translation3d[]::new);
+        int n = fuels.size();
+        Translation3d[] positions = new Translation3d[n];
+        for (int i = 0; i < n; i++) {
+            positions[i] = fuels.get(i).pos;
+        }
         fuelPublisher.set(positions);
         Logger.recordOutput(LOG_FUELS_KEY, positions);
-    }
+    } // End logFuels
+
+    private void logFuelsIfDue() {
+        fuelsLogCounter++;
+        if (fuelsLogCounter % fuelsLogPeriod != 0) {
+            return;
+        }
+        logFuels();
+    } // End logFuelsIfDue
 
     /**
      * Start the simulation. `updateSim` must still be called every loop
      */
     public void start() {
         running = true;
-    }
+        fuelsLogCounter = 0;
+        logFuels();
+    } // End start
 
     /**
      * Pause the simulation.
@@ -458,7 +507,12 @@ public class FuelSim {
      */
     public void setSubticks(int subticks) {
         this.subticks = subticks;
-    }
+    } // End setSubticks
+
+    /** How often to publish fuel poses (1 = every 20 ms, 3 ≈ 15 Hz). */
+    public void setFuelsLogPeriod(int everyNRobotPeriods) {
+        this.fuelsLogPeriod = Math.max(1, everyNRobotPeriods);
+    } // End setFuelsLogPeriod
 
     /**
      * Registers a robot with the fuel simulator
@@ -529,8 +583,8 @@ public class FuelSim {
             }
         }
 
-        logFuels();
-    }
+        logFuelsIfDue();
+    } // End stepSim
 
     /**
      * Adds a fuel onto the field
@@ -631,27 +685,60 @@ public class FuelSim {
         if (robotVel.dot(normal) > 0) fuel.addImpulse(new Translation3d(normal.times(robotVel.dot(normal))));
     }
 
+    /** Matches RobotContainer intake: 10.5 in beyond front of frame (robot +X). */
+    private static final double kIntakeBeyondFrontMeters = 10.5 * 0.0254;
+
+    /**
+     * Furthest point on bumpers + extended intake from robot center (robot frame), plus fuel radius
+     * and slack — balls outside this field-XY circle skip bumper and intake checks.
+     */
+    private double robotFieldInfluenceRadiusSq() {
+        double halfL = robotLength * 0.5;
+        double halfW = robotWidth * 0.5;
+        double reach = Math.hypot(halfL + kIntakeBeyondFrontMeters, halfW) + FUEL_RADIUS + 0.15;
+        return reach * reach;
+    } // End robotFieldInfluenceRadiusSq
+
     protected void handleRobotCollisions(ArrayList<Fuel> fuels) {
         Pose2d robot = robotPoseSupplier.get();
         ChassisSpeeds speeds = robotFieldSpeedsSupplier.get();
         Translation2d robotVel = new Translation2d(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
 
+        double rx = robot.getX();
+        double ry = robot.getY();
+        double reachSq = robotFieldInfluenceRadiusSq();
+
         for (Fuel fuel : fuels) {
+            double dx = fuel.pos.getX() - rx;
+            double dy = fuel.pos.getY() - ry;
+            if (dx * dx + dy * dy > reachSq) {
+                continue;
+            }
             handleRobotCollision(fuel, robot, robotVel);
         }
-    }
+    } // End handleRobotCollisions
 
     protected void handleIntakes(ArrayList<Fuel> fuels) {
         Pose2d robot = robotPoseSupplier.get();
+        double rx = robot.getX();
+        double ry = robot.getY();
+        double reachSq = robotFieldInfluenceRadiusSq();
+
         for (SimIntake intake : intakes) {
             for (int i = 0; i < fuels.size(); i++) {
-                if (intake.shouldIntake(fuels.get(i), robot)) {
+                Fuel fuel = fuels.get(i);
+                double dx = fuel.pos.getX() - rx;
+                double dy = fuel.pos.getY() - ry;
+                if (dx * dx + dy * dy > reachSq) {
+                    continue;
+                }
+                if (intake.shouldIntake(fuel, robot)) {
                     fuels.remove(i);
                     i--;
                 }
             }
         }
-    }
+    } // End handleIntakes
 
     protected static void fuelCollideRectangle(Fuel fuel, Translation3d start, Translation3d end) {
         if (fuel.pos.getZ() > end.getZ() + FUEL_RADIUS || fuel.pos.getZ() < start.getZ() - FUEL_RADIUS)

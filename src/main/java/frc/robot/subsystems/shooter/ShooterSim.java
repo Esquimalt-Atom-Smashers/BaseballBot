@@ -52,9 +52,11 @@ public class ShooterSim {
     return launchSpawnsInFuelSim && fuelStored < CAPACITY;
   } // End canIntake
 
-  /** Called by FuelSim when a ball is intaked; increments stored count. */
+  /** Called by FuelSim when a ball is intaked; increments stored count up to {@link #CAPACITY}. */
   public void intakeFuel() {
-    fuelStored++;
+    if (fuelStored < CAPACITY) {
+      fuelStored++;
+    }
   } // End intakeFuel
 
   /**
