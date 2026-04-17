@@ -9,9 +9,12 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.Dimensions;
+import frc.robot.subsystems.drive.Drive;
 import frc.robot.FieldConstants;
 import java.util.function.Supplier;
 import org.littletonrobotics.junction.Logger;
+
+import com.fasterxml.jackson.databind.JsonSerializable.Base;
 
 public class Zones {
     public static interface Zone {
@@ -139,6 +142,7 @@ public class Zones {
         }
     }
 
+
     private static final double ROBOT_HALF_LENGTH_M = Dimensions.FULL_LENGTH.in(Meters) / 2.0;
 
     public static final PredictiveXBaseZone BLUE_BOTTOM_TRENCH = new PredictiveXBaseZone(
@@ -157,6 +161,39 @@ public class Zones {
     public static final PredictiveXZoneCollection TRENCH_ZONES =
             new PredictiveXZoneCollection(BLUE_BOTTOM_TRENCH, BLUE_TOP_TRENCH, RED_BOTTOM_TRENCH, RED_TOP_TRENCH);
 
+    public static BaseZone getContainingTrenchZone(Pose2d pose)
+    {
+        if (pose == null) return null;
+        Translation2d pt = pose.getTranslation();
+        for (Zone z : TRENCH_ZONES.zones) {
+            if (z instanceof BaseZone) {
+                BaseZone bz = (BaseZone) z;
+                if (bz.containsPoint(pt)) return bz;
+            }
+        }
+        return null;
+    }
+
+    public static int determineSideOfTrench(Pose2d pose){
+        BaseZone currentTrench = getContainingTrenchZone(pose);
+        
+        if (currentTrench == null)
+        {
+            System.out.println("Not in a Trench!");
+            return 0;
+        }
+        
+        double x1 = currentTrench.xMin;
+        double x2 = currentTrench.xMax;
+        double average = (x1 + x2) / 2;
+
+        if (pose.getX() > average)
+        {
+            return 1;
+        } else {
+            return -1;
+        }
+    }
     /** Extra distance (m) for duck zone beyond trench bar. */
     private static final double TRENCH_DUCK_EXTRA_DISTANCE_M = 0.5;
 
@@ -208,4 +245,7 @@ public class Zones {
         Logger.recordOutput("Zones/Bumps/Red Bottom", RED_BOTTOM_BUMP.getCorners());
         Logger.recordOutput("Zones/Bumps/Red Top", RED_TOP_BUMP.getCorners());
     }
+
+
+
 }

@@ -114,7 +114,7 @@ public class TeleopDrive extends Command {
     { if (
       // If extender is out, if hood is raised, or if hang is out, go to invalid
       extender.getState() == State.PARTIAL 
-      || hood.getAngleRad() >= HoodConstants.kMinAngleRad 
+      || hood.getAngleRad() < HoodConstants.kMinAngleRad 
       || hang.getPositionMeters() > HangConstants.kStoredPositionMeters ) 
       {
         currentDriveMode = DriveMode.INVALID_TRENCH;
@@ -251,8 +251,12 @@ public class TeleopDrive extends Command {
         break;
 
       case INVALID_TRENCH:
-        int xVelocity = Zones.determineSideOfTrench(drive.getPose());
+        double xVelocity = Zones.determineSideOfTrench(drive.getPose());
         
+        if (xVelocity == 0)
+        {
+          xVelocity = linearVelocity.getX();
+        }
         double rotate = isFacingHubSupplier.getAsBoolean()
             ? DriveCommands.computeOmegaToFaceHub(drive, faceTargetController)
             : maxRotSpeedRadPerS * omega;
