@@ -88,7 +88,7 @@ public class Module {
   public void runSetpoint(SwerveModuleState state) {
     // Optimize velocity setpoint
     state.optimize(getAngle());
-    state.cosineScale(inputs.turnPosition); // XXX: Consider if it should be relative or absolute (inputs.turnAbsolutePosition)
+    state.cosineScale(inputs.turnPosition);
 
     // Apply setpoints
     io.setDriveVelocity(state.speedMetersPerSecond / constants.WheelRadius);
@@ -109,7 +109,7 @@ public class Module {
 
   /** Returns the current turn angle of the module. */
   public Rotation2d getAngle() {
-    return inputs.turnPosition; // XXX: Consider if it should be relative or absolute (inputs.turnAbsolutePosition)
+    return inputs.turnPosition;
   }
 
   /** Returns drive wheel angular velocity (rad/s). */

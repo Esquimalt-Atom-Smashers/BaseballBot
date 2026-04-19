@@ -51,6 +51,7 @@ public final class ExtenderConstants {
   /** Tolerance for considering the Extender at target (measured vs target). */
   public static final double kAtTargetToleranceRad = Units.degreesToRadians(2.0);
 
-  /** Delta Rad per step. */ // TODO: Make going up step 10, lower 5
-  public static final double kStepRad = Units.degreesToRadians(10.0);
+  /** Delta Rad per step. */
+  public static final double kStepRadUp = Units.degreesToRadians(10.0);
+  public static final double kStepRadDown = Units.degreesToRadians(5.0);
 }

@@ -164,6 +164,9 @@ public class RobotContainer {
 	/** Null unless {@link Constants.Mode#SIM}: choosers, apply/reset, full-field Maple extras. */
 	private SimStartingPoseFullFieldSim simSpawnSim = null;
 
+	/** Field Reset SmartDashboard Key */
+	private static final String SIM_RESET_SIMULATION_FIELD_KEY = "SimField/ResetSimulationField";
+
 	/** Full duplicate sim robot (driver-only OI); null until enabled from the dashboard in SIM. */
 	private SecondSimRobotBundle secondSimBundle = null;
 
@@ -346,9 +349,10 @@ public class RobotContainer {
 		SmartDashboard.putData("Field", field);
 		if (Constants.currentMode == Constants.Mode.SIM) {
 			SmartDashboard.putData(SimSecondRobotSession.DASHBOARD_KEY, simSecondRobotSession.getModeChooser());
-			SmartDashboard.putBoolean("SimStartingPoses/Apply", false);
-			SmartDashboard.putBoolean("SimStartingPoses/ResetToDefaults", false);
+			SmartDashboard.putBoolean("SimStartingPose/Apply", false);
+			SmartDashboard.putBoolean("SimStartingPose/ResetToDefaults", false);
 			SmartDashboard.putBoolean("SimFullFieldExtraRobots/Enabled", false);
+			SmartDashboard.putBoolean(SIM_RESET_SIMULATION_FIELD_KEY, false);
 		}
 
 		// Register PathPlanner named commands
@@ -554,7 +558,7 @@ public class RobotContainer {
 		operatorController.leftTrigger().onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> {
-					extender.stepPositionRad(ExtenderConstants.kStepRad);
+					extender.stepPositionRad(ExtenderConstants.kStepRadUp);
 				}),
 				new InstantCommand(),
 				() -> extender != null)
@@ -563,7 +567,7 @@ public class RobotContainer {
 		operatorController.rightTrigger().onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> {
-					extender.stepPositionRad(-ExtenderConstants.kStepRad);
+					extender.stepPositionRad(-ExtenderConstants.kStepRadDown);
 				}),
 				new InstantCommand(),
 				() -> extender != null)
@@ -847,11 +851,64 @@ public class RobotContainer {
 	/// -----------------------------------------------------------------------------------------------------------------
 	/// ------------------------------------------------ Simulation Only ------------------------------------------------
 	/// -----------------------------------------------------------------------------------------------------------------
-  /** Resets FuelSim, Starting Poses, and set match timer for Autonomous. SIM only. */
+	/**
+	 * SIM only: applies chooser starting poses (same path as Elastic {@code SimStartingPose/Apply}), resets fuel when
+	 * {@link #fuelSimEnabled}. Called from {@link Robot#disabledInit} and from Elastic via {@value #SIM_RESET_SIMULATION_FIELD_KEY}.
+	 */
 	public void resetSimulationField() {
-		if (Constants.currentMode != Constants.Mode.SIM) return;
-		// TODO: Implement this
+		if (Constants.currentMode != Constants.Mode.SIM) {
+			return;
+		}
+		runSimulationFieldReset();
 	} // End resetSimulationField
+
+	/**
+	 * Pulses {@code SimStartingPose/Apply} and runs the same {@link SimStartingPoseFullFieldSim#pollApplyButton} logic
+	 * as the Elastic Apply control, then {@link FuelSim#resetFuel()} if fuel sim is enabled.
+	 */
+	private void runSimulationFieldReset() {
+		if (simSpawnSim == null) {
+			return;
+		}
+		SmartDashboard.putBoolean("SimStartingPose/Apply", true);
+		pollSimStartingPosesApplyButton();
+		if (fuelSimEnabled) {
+			fuelSim.resetFuel();
+		}
+	} // End runSimulationFieldReset
+
+	/** If {@value #SIM_RESET_SIMULATION_FIELD_KEY} is true, clears it and runs {@link #runSimulationFieldReset()}. */
+	private void pollResetSimulationFieldDashboardButton() {
+		if (!SmartDashboard.getBoolean(SIM_RESET_SIMULATION_FIELD_KEY, false)) {
+			return;
+		}
+		SmartDashboard.putBoolean(SIM_RESET_SIMULATION_FIELD_KEY, false);
+		runSimulationFieldReset();
+	} // End pollResetSimulationFieldDashboardButton
+
+	/** Applies primary robot pose from starting-pose choosers to Maple sim and odometry. */
+	private void applyPrimarySimStartingPoseFromChooser(Pose2d appliedPose) {
+		driveSimulation.setSimulationWorldPose(appliedPose);
+		drive.setPose(appliedPose);
+	} // End applyPrimarySimStartingPoseFromChooser
+
+	/** Applies second-sim robot pose from starting-pose choosers when that bundle exists. */
+	private void applySecondSimStartingPoseFromChooser(Pose2d secondSimAppliedPose) {
+		if (secondSimBundle != null) {
+			secondSimBundle.driveSimulation.setSimulationWorldPose(secondSimAppliedPose);
+			secondSimBundle.drive.setPose(secondSimAppliedPose);
+		}
+	} // End applySecondSimStartingPoseFromChooser
+
+	/** Consumes Elastic {@code SimStartingPose/Apply} when true and teleports robots to chooser poses. */
+	private void pollSimStartingPosesApplyButton() {
+		simSpawnSim.pollApplyButton(
+				true,
+				simSecondRobotSession.isDriveEnabledFromDashboard(),
+				simSecondRobotSession.isRedAlliance(),
+				this::applyPrimarySimStartingPoseFromChooser,
+				this::applySecondSimStartingPoseFromChooser);
+	} // End pollSimStartingPosesApplyButton
 
 	/**
 	 * Updates the dyn4j chassis collision footprint for the MapleSim drive sim so the rear bumper
@@ -1000,6 +1057,8 @@ public class RobotContainer {
 	public void updateSimulation() {
 		if (Constants.currentMode != Constants.Mode.SIM) return;
 
+		pollResetSimulationFieldDashboardButton();
+
 		simSpawnSim.pollResetToDefaults(true, SimSecondRobotSession::forceModeDisableViaNt);
 		simSecondRobotSession.poll(
 				simSecondRobotHost,
@@ -1012,20 +1071,7 @@ public class RobotContainer {
 				true,
 				simSecondRobotSession.isDriveEnabledFromDashboard(),
 				simSecondRobotSession.isRedAlliance());
-		simSpawnSim.pollApplyButton(
-				true,
-				simSecondRobotSession.isDriveEnabledFromDashboard(),
-				simSecondRobotSession.isRedAlliance(),
-				appliedPose -> {
-					driveSimulation.setSimulationWorldPose(appliedPose);
-					drive.setPose(appliedPose);
-				},
-				secondSimAppliedPose -> {
-					if (secondSimBundle != null) {
-						secondSimBundle.driveSimulation.setSimulationWorldPose(secondSimAppliedPose);
-						secondSimBundle.drive.setPose(secondSimAppliedPose);
-					}
-				});
+		pollSimStartingPosesApplyButton();
 
 		boolean extenderExtendedForCollision = extender.getState() == Extender.State.EXTENDED;
 		if (extenderExtendedForCollision != driveSimCollisionExtenderExtended) {
