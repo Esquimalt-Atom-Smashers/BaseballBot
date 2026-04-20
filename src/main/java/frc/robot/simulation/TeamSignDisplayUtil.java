@@ -140,14 +140,14 @@ public final class TeamSignDisplayUtil {
 		if (shiftInfo.currentShift() == HubShiftUtil.ShiftEnum.DISABLED) {
 			return 0;
 		}
-		return (int) Math.ceil(Math.max(0.0, shiftInfo.remainingTime() - 1.0e-6));
+		return (int) Math.ceil(Math.max(0.0, shiftInfo.remainingTime() - 1.0e-6)); // TODO: Check with Drive Team about Driverstation Display (https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf Page 30)
 	} // End shiftSecondsToDisplay
 
 	private static String formatMatchClock(double matchTimeSec) {
 		if (matchTimeSec < 0.0 || Double.isNaN(matchTimeSec)) {
 			return "--:--";
 		}
-		int totalSeconds = (int) Math.floor(Math.max(0.0, matchTimeSec) + 1.0e-6);
+		int totalSeconds = (int) Math.ceil(Math.max(0.0, matchTimeSec) - 1.0e-6);
 		int minutes = totalSeconds / 60;
 		int seconds = totalSeconds % 60;
 		return String.format("%d:%02d", minutes, seconds);
