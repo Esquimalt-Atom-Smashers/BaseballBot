@@ -1013,14 +1013,14 @@ public class RobotContainer {
 					robotWidthMeters,
 					robotLengthMeters,
 					bumperHeightMeters,
-					driveForFuel::getPose,
+					mapleDriveSimulation::getSimulatedDriveTrainPose,
 					driveForFuel::getFieldRelativeChassisSpeeds, mapleDriveSimulation);
 		}
 		fuelSim.registerRobot(
 				robotWidthMeters,
 				robotLengthMeters,
 				bumperHeightMeters,
-				driveForFuel::getPose,
+				mapleDriveSimulation::getSimulatedDriveTrainPose,
 				driveForFuel::getFieldRelativeChassisSpeeds, mapleDriveSimulation);
 		return 0;
 	} // End registerFuelSimRobotBody
