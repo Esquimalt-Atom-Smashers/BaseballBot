@@ -1,0 +1,95 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 1.731,
+        "y": 7.613
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 0.05978354204256653,
+        "y": 7.612999999989202
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 0.466,
+        "y": 6.071288014305926
+      },
+      "prevControl": {
+        "x": 0.4497464168526812,
+        "y": 6.363836849605049
+      },
+      "nextControl": {
+        "x": 0.4798682450062448,
+        "y": 5.821672967122375
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 0.466,
+        "y": 2.988461538456194
+      },
+      "prevControl": {
+        "x": 0.466,
+        "y": 3.238461538456194
+      },
+      "nextControl": {
+        "x": 0.46600000000000014,
+        "y": 0.9884615384561939
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 1.3579785330899272,
+        "y": 0.5708765652898251
+      },
+      "prevControl": {
+        "x": 1.2768515205626818,
+        "y": 0.9602862253918161
+      },
+      "nextControl": null,
+      "isLocked": false,
+      "linkedName": null
+    }
+  ],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.5,
+      "rotationDegrees": -90.0
+    },
+    {
+      "waypointRelativePos": 2.2716049382716132,
+      "rotationDegrees": -90.0
+    }
+  ],
+  "constraintZones": [],
+  "pointTowardsZones": [],
+  "eventMarkers": [],
+  "globalConstraints": {
+    "maxVelocity": 3.0,
+    "maxAcceleration": 2.0,
+    "maxAngularVelocity": 540.0,
+    "maxAngularAcceleration": 720.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 0,
+    "rotation": 0.0
+  },
+  "reversed": false,
+  "folder": "Sim Robot Pathings",
+  "idealStartingState": {
+    "velocity": 0,
+    "rotation": 180.0
+  },
+  "useDefaultConstraints": true
+}

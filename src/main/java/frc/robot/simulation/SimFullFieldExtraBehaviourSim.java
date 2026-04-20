@@ -38,8 +38,8 @@ import frc.robot.util.LocalADStarAK;
  *
  * <p>This class intentionally excludes Primary and Second-Sim because those are human-controlled robots.
  *
- * <p>Dashboard behavior strings include {@value #OPTION_CYCLE_BUMP} for the PathPlanner bump loop (alliance ↔
- * neutral legs and hub scoring when shift and fuel allow).
+ * <p>Cycle behaviors {@value #OPTION_CYCLE_BUMP} and {@value #OPTION_CYCLE_TRENCH} share the same two-path PathPlanner
+ * sim loop ({@code pathOne} then {@code pathTwo}) and hub scoring rules.
  */
 public final class SimFullFieldExtraBehaviourSim {
 
@@ -48,6 +48,8 @@ public final class SimFullFieldExtraBehaviourSim {
 	public static final String OPTION_DEFENSE_AGGRESSIVE = "Defense (Aggressive)";
 	/** Bump loop: pathfind to authored path starts, follow spline samples, hub score when shift and fuel allow. */
 	public static final String OPTION_CYCLE_BUMP = "Cycle (Bump)";
+	/** Trench loop: {@code AllianceWallSweep} then {@code NeutralZoneSweep}; same two-path hub scoring as bump. */
+	public static final String OPTION_CYCLE_TRENCH = "Cycle (Trench)";
 
 	// Staggered replanning times to avoid collisions
 	/** Prime replan periods per role (different primes prevent collisions). */
@@ -99,53 +101,71 @@ public final class SimFullFieldExtraBehaviourSim {
 	/** Fallback backoff heading when target and robot overlap. */
 	private static final double kDefenseAggressiveFallbackBackoffXSign = -1.0;
 
-	// Cycle (Bump): PathPlanner authored legs + navgrid to path starts
+	// Two-path cycle: authored PathPlanner legs plus navgrid to each holonomic start.
 	/** AD star constraints for reaching holonomic path starts. */
-	private static final PathConstraints kBumpCyclePathConstraints =
+	private static final PathConstraints kTwoPathCyclePathConstraints =
 			new PathConstraints(5.0, 5.0, 2.5 * Math.PI, 3.0 * Math.PI);
 	/** Translation tolerance (m) to treat holonomic path start as reached. */
-	private static final double kBumpCyclePathStartArriveMeters = 0.42;
+	private static final double kTwoPathCyclePathStartArriveMeters = 0.42;
 	/** Advance follow index when this close to the current sample (m). */
-	private static final double kBumpCycleFollowWaypointToleranceMeters = 0.42;
+	private static final double kTwoPathCycleFollowWaypointToleranceMeters = 0.42;
 	/** XY error to field velocity gain for follow and path-start approach. */
-	private static final double kBumpCycleFollowLinearP = 4.5;
+	private static final double kTwoPathCycleFollowLinearP = 4.5;
 	/** Heading error to omega gain for follow and path-start approach. */
-	private static final double kBumpCycleFollowOmegaP = 2.8;
-	/** Linear speed clamp during bump follow (m/s). */
-	private static final double kBumpCycleFollowMaxLinearMetersPerSec = 3.0;
-	/** Omega clamp during bump follow (rad/s). */
-	private static final double kBumpCycleFollowMaxOmegaRadPerSec = 2.8;
+	private static final double kTwoPathCycleFollowOmegaP = 5;
+	/** Linear speed clamp during spline follow (m/s). */
+	private static final double kTwoPathCycleFollowMaxLinearMetersPerSec = 3.0;
+	/** Omega clamp during spline follow (rad/s). */
+	private static final double kTwoPathCycleFollowMaxOmegaRadPerSec = 5;
 	/**
-	 * Minimum sim ticks between hub launch attempts during {@link #OPTION_CYCLE_BUMP} for full-field extras only.
+	 * Minimum sim ticks between hub launch attempts during two-path cycle behaviors for full-field extras only.
 	 * With a 20 ms robot loop, average launch rate is about 50 divided by this value (per second).
 	 * Primary and second sim use {@link frc.robot.subsystems.shooter.ShooterSim} for shoot cadence instead.
 	 */
-	private static final int kBumpCycleScoreLaunchIntervalTicks = 5;
+	private static final int kTwoPathCycleScoreLaunchIntervalTicks = 5;
 	/** Max |heading error| (rad) before a launch is allowed. */
-	private static final double kBumpCycleScoreFacingToleranceRad = 0.14;
+	private static final double kTwoPathCycleScoreFacingToleranceRad = 0.14;
 	/**
-	 * Sim ticks without reaching holonomic path start before re-picking pathfind leg from current field zone (2.0 s
-	 * when {@link #updateExtraRobotBehaviors} runs once per 20 ms robot period).
+	 * Sim ticks without reaching holonomic path start before re-picking which pathfind leg to run from the nearer
+	 * holonomic start (2.0 s when {@link #updateExtraRobotBehaviors} runs once per 20 ms robot period).
 	 */
-	private static final int kBumpCyclePathfindStartTimeoutTicks = 100;
+	private static final int kTwoPathCyclePathfindStartTimeoutTicks = 100;
 
-	/** Deployed PathPlanner stem for alliance-to-neutral bump leg (blue frame). */
-	private static final String BUMP_PATH_ALLIANCE_TO_NEUTRAL = "Bump-AllianceToNeutral-Left";
-	/** Deployed PathPlanner stem for neutral-to-alliance bump leg (blue frame). */
-	private static final String BUMP_PATH_NEUTRAL_TO_ALLIANCE = "Bump-NeutralToAlliance-Right";
+	/** PathPlanner deploy file stem for bump cycle path one (blue alliance frame). */
+	private static final String BUMP_CYCLE_PATH_ONE_DEPLOY_STEM = "Bump-AllianceToNeutral-Left";
+	/** PathPlanner deploy file stem for bump cycle path two (blue alliance frame). */
+	private static final String BUMP_CYCLE_PATH_TWO_DEPLOY_STEM = "Bump-NeutralToAlliance-Right";
 
-	/** Loaded blue-frame alliance-to-neutral path; null if load failed. */
-	private static PathPlannerPath bumpA2nBlueAuthoring;
-	/** Loaded blue-frame neutral-to-alliance path; null if load failed. */
-	private static PathPlannerPath bumpN2aBlueAuthoring;
-	/** Red alliance copy of {@link #bumpA2nBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath bumpA2nRedAuthoring;
-	/** Red alliance copy of {@link #bumpN2aBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath bumpN2aRedAuthoring;
+	/** Loaded blue-frame first bump leg; null if load failed. */
+	private static PathPlannerPath bumpPathOneBlueAuthoring;
+	/** Loaded blue-frame second bump leg; null if load failed. */
+	private static PathPlannerPath bumpPathTwoBlueAuthoring;
+	/** Red alliance copy of {@link #bumpPathOneBlueAuthoring}; null if load failed. */
+	private static PathPlannerPath bumpPathOneRedAuthoring;
+	/** Red alliance copy of {@link #bumpPathTwoBlueAuthoring}; null if load failed. */
+	private static PathPlannerPath bumpPathTwoRedAuthoring;
 	/** True after first attempt to read bump paths from deploy. */
 	private static boolean bumpPathsLoadAttempted;
 	/** Non-null when bump path load threw; used for sim log only. */
 	private static String bumpPathsLoadError;
+
+	/** PathPlanner deploy file stem for trench cycle path one (blue alliance frame). */
+	private static final String TRENCH_CYCLE_PATH_ONE_DEPLOY_STEM = "AllianceWallSweep";
+	/** PathPlanner deploy file stem for trench cycle path two (blue alliance frame). */
+	private static final String TRENCH_CYCLE_PATH_TWO_DEPLOY_STEM = "NeutralZoneSweep";
+
+	/** Loaded blue-frame first trench leg; null if load failed. */
+	private static PathPlannerPath trenchPathOneBlueAuthoring;
+	/** Loaded blue-frame second trench leg; null if load failed. */
+	private static PathPlannerPath trenchPathTwoBlueAuthoring;
+	/** Red alliance copy of {@link #trenchPathOneBlueAuthoring}; null if load failed. */
+	private static PathPlannerPath trenchPathOneRedAuthoring;
+	/** Red alliance copy of {@link #trenchPathTwoBlueAuthoring}; null if load failed. */
+	private static PathPlannerPath trenchPathTwoRedAuthoring;
+	/** True after first attempt to read trench paths from deploy. */
+	private static boolean trenchPathsLoadAttempted;
+	/** Non-null when trench path load threw; used for sim log only. */
+	private static String trenchPathsLoadError;
 
 	private static final int[] EXTRA_ROLES = {
 			SimStartingPoseFullFieldSim.ROLE_BLUE_2,
@@ -200,29 +220,29 @@ public final class SimFullFieldExtraBehaviourSim {
 	private final Map<Integer, String> lastBehaviorByRole = new HashMap<>();
 	private int behaviorTickCounter = 0;
 
-	/** High-level states for one extra running {@link #OPTION_CYCLE_BUMP}. */
-	private enum BumpCyclePhase {
-		/** Navgrid to holonomic start of alliance-to-neutral authored path. */
-		PATHFIND_TO_A2N_START,
-		/** Field-centric tracking of sampled authored path points. */
-		FOLLOW_A2N,
-		/** Navgrid to holonomic start of neutral-to-alliance authored path. */
-		PATHFIND_TO_N2A_START,
-		/** Field-centric tracking of sampled authored path points. */
-		FOLLOW_N2A,
+	/** Phases for {@link #runTwoPathCycleSim}: pathfind and follow each leg, then optional hub scoring. */
+	private enum ExtraSimTwoPathCyclePhase {
+		/** Navgrid to the first leg holonomic start. */
+		PATHFIND_TO_PATHONE,
+		/** Field-centric tracking of the first leg samples. */
+		FOLLOW_PATHONE,
+		/** Navgrid to the second leg holonomic start. */
+		PATHFIND_TO_PATHTWO,
+		/** Field-centric tracking of the second leg samples. */
+		FOLLOW_PATHTWO,
 		/** Turn toward hub and launch carried fuel when shift timing allows. */
 		SCORE_HUB
 	}
 
-	private final Map<Integer, BumpCyclePhase> bumpCyclePhaseByRole = new HashMap<>();
-	private final Map<Integer, List<Translation2d>> bumpCycleFollowPointsByRole = new HashMap<>();
-	private final Map<Integer, Integer> bumpCycleFollowIndexByRole = new HashMap<>();
-	private final Map<Integer, LocalADStarAK> bumpCyclePathfinderByRole = new HashMap<>();
-	private final Map<Integer, PathPlannerPath> bumpCyclePathByRole = new HashMap<>();
-	private final Map<Integer, Pose2d> bumpCycleLastGoalByRole = new HashMap<>();
-	private final Map<Integer, Integer> bumpCycleLastLaunchTickByRole = new HashMap<>();
-	/** {@link #behaviorTickCounter} when the current PATHFIND_TO_* leg began (cleared on arrive, timeout, behavior change). */
-	private final Map<Integer, Integer> bumpCyclePathfindLegStartTickByRole = new HashMap<>();
+	private final Map<Integer, ExtraSimTwoPathCyclePhase> twoPathCyclePhaseByRole = new HashMap<>();
+	private final Map<Integer, List<Translation2d>> twoPathCycleFollowPointsByRole = new HashMap<>();
+	private final Map<Integer, Integer> twoPathCycleFollowIndexByRole = new HashMap<>();
+	private final Map<Integer, LocalADStarAK> twoPathCyclePathfinderByRole = new HashMap<>();
+	private final Map<Integer, PathPlannerPath> twoPathCyclePathByRole = new HashMap<>();
+	private final Map<Integer, Pose2d> twoPathCycleLastGoalByRole = new HashMap<>();
+	private final Map<Integer, Integer> twoPathCycleLastLaunchTickByRole = new HashMap<>();
+	/** {@link #behaviorTickCounter} when the current pathfind leg began (cleared on arrive, timeout, behavior change). */
+	private final Map<Integer, Integer> twoPathCyclePathfindLegStartTickByRole = new HashMap<>();
 
 	public void init() {
 		for (int index = 0; index < EXTRA_ROLES.length; index++) {
@@ -232,6 +252,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			behaviorChooser.addOption(OPTION_DEFENSE_BLOCK, OPTION_DEFENSE_BLOCK);
 			behaviorChooser.addOption(OPTION_DEFENSE_AGGRESSIVE, OPTION_DEFENSE_AGGRESSIVE);
 			behaviorChooser.addOption(OPTION_CYCLE_BUMP, OPTION_CYCLE_BUMP);
+			behaviorChooser.addOption(OPTION_CYCLE_TRENCH, OPTION_CYCLE_TRENCH);
 			SmartDashboard.putData(dashboardKeyForExtraIndex(index), behaviorChooser);
 		}
 	} // End init
@@ -296,7 +317,10 @@ public final class SimFullFieldExtraBehaviourSim {
 	 * <p>Red defenders track Primary. Blue defenders track Second-Sim when it is on red, otherwise Red-2.
 	 *
 	 * @param fuelSim registered fuel simulation instance, or null when fuel sim is off
-	 * @param fuelSimEnabled when false, {@link #OPTION_CYCLE_BUMP} scoring treats carried fuel count as zero
+	 * @param fuelSimEnabled when false, two-path cycle hub scoring treats carried fuel count as zero
+	 *
+	 * <p>When {@code teleopEnabled} is false, active extras stop and all extra motion caches (including two-path cycle
+	 * phase) are cleared so re-enable cold-starts pathfind instead of resuming a follow leg.
 	 */
 	public void updateExtraRobotBehaviors(
 			SimFullFieldExtraRobot[] extraRobotsByPool,
@@ -319,6 +343,9 @@ public final class SimFullFieldExtraBehaviourSim {
 		if (!teleopEnabled) {
 			for (SimFullFieldExtraRobot extraRobot : activeExtraByRole.values()) {
 				extraRobot.drive.stop();
+			}
+			for (int role : EXTRA_ROLES) {
+				clearTransientExtraMotionCaches(role);
 			}
 			return;
 		}
@@ -353,6 +380,8 @@ public final class SimFullFieldExtraBehaviourSim {
 				runDefenseAggressivePathfind(role, extraRobot, roleIsRedAlliance(role), targetPose);
 			} else if (OPTION_CYCLE_BUMP.equals(selectedBehavior)) {
 				runBumpCycleSim(role, extraRobot, fuelSim, fuelSimEnabled);
+			} else if (OPTION_CYCLE_TRENCH.equals(selectedBehavior)) {
+				runTrenchCycleSim(role, extraRobot, fuelSim, fuelSimEnabled);
 			} else {
 				// Includes explicit Do Nothing plus any future, unimplemented options.
 				extraRobot.drive.stop();
@@ -547,15 +576,10 @@ public final class SimFullFieldExtraBehaviourSim {
 	} // End replanAndGetPath
 
 	/**
-	 * Clears defense, aggressive, and {@link #OPTION_CYCLE_BUMP} cached state for {@code role} when its selected
-	 * behavior string changes.
+	 * Clears pathfind, follow, and two-path-cycle caches for one extra role. Does not change {@link #lastBehaviorByRole}
+	 * or dashboard selection.
 	 */
-	private void resetRoleStateOnBehaviorChange(int role, String selectedBehavior) {
-		String previousBehavior = lastBehaviorByRole.get(role);
-		if (selectedBehavior.equals(previousBehavior)) {
-			return;
-		}
-		lastBehaviorByRole.put(role, selectedBehavior);
+	private void clearTransientExtraMotionCaches(int role) {
 		defensePathByRole.remove(role);
 		defenseLastGoalByRole.remove(role);
 		aggressivePathByRole.remove(role);
@@ -564,14 +588,27 @@ public final class SimFullFieldExtraBehaviourSim {
 		aggressiveBackoffGoalByRole.remove(role);
 		aggressiveBackoffStartTickByRole.remove(role);
 		aggressiveRamContactTickByRole.remove(role);
-		bumpCyclePhaseByRole.remove(role);
-		bumpCycleFollowPointsByRole.remove(role);
-		bumpCycleFollowIndexByRole.remove(role);
-		bumpCyclePathfinderByRole.remove(role);
-		bumpCyclePathByRole.remove(role);
-		bumpCycleLastGoalByRole.remove(role);
-		bumpCycleLastLaunchTickByRole.remove(role);
-		bumpCyclePathfindLegStartTickByRole.remove(role);
+		twoPathCyclePhaseByRole.remove(role);
+		twoPathCycleFollowPointsByRole.remove(role);
+		twoPathCycleFollowIndexByRole.remove(role);
+		twoPathCyclePathfinderByRole.remove(role);
+		twoPathCyclePathByRole.remove(role);
+		twoPathCycleLastGoalByRole.remove(role);
+		twoPathCycleLastLaunchTickByRole.remove(role);
+		twoPathCyclePathfindLegStartTickByRole.remove(role);
+	} // End clearTransientExtraMotionCaches
+
+	/**
+	 * Updates {@link #lastBehaviorByRole} and clears motion caches for {@code role} when its selected behavior string
+	 * changes.
+	 */
+	private void resetRoleStateOnBehaviorChange(int role, String selectedBehavior) {
+		String previousBehavior = lastBehaviorByRole.get(role);
+		if (selectedBehavior.equals(previousBehavior)) {
+			return;
+		}
+		lastBehaviorByRole.put(role, selectedBehavior);
+		clearTransientExtraMotionCaches(role);
 	} // End resetRoleStateOnBehaviorChange
 
 	/** Computes a 3m backoff point away from the tracked target. */
@@ -623,7 +660,7 @@ public final class SimFullFieldExtraBehaviourSim {
 	/**
 	 * Drives field-centrically toward a pose target using independent X/Y proportional gains and a shared linear clamp.
 	 * Zero rotation output; callers that want heading control should use
-	 * {@link #driveBumpCycleFieldCentric(SimFullFieldExtraRobot, Pose2d, Pose2d, double)} instead.
+	 * {@link #driveTwoPathCycleFieldCentric(SimFullFieldExtraRobot, Pose2d, Pose2d, double)} instead.
 	 */
 	private static void driveTowardPoseProportional(
 			SimFullFieldExtraRobot extraRobot,
@@ -658,46 +695,57 @@ public final class SimFullFieldExtraBehaviourSim {
 	} // End roleIsRedAlliance
 
 	/**
-	 * Drops pathfind/follow state and forces {@link BumpCyclePhase#SCORE_HUB}. Caller must only invoke when alliance
-	 * zone, hub shift, and carried fuel gate all passed in {@link #runBumpCycleSim}.
+	 * Drops pathfind/follow state and forces {@link ExtraSimTwoPathCyclePhase#SCORE_HUB}. Caller must only invoke when
+	 * alliance zone, hub shift, and carried fuel gate all passed in {@link #runTwoPathCycleSim}.
 	 */
-	private void enterBumpCycleScoreHubFromTravel(int role, SimFullFieldExtraRobot extraRobot) {
+	private void enterTwoPathCycleScoreHubFromTravel(int role, SimFullFieldExtraRobot extraRobot) {
 		extraRobot.drive.stop();
-		bumpCyclePathfindLegStartTickByRole.remove(role);
-		clearCycleNav(role);
-		bumpCycleFollowPointsByRole.remove(role);
-		bumpCycleFollowIndexByRole.remove(role);
-		bumpCyclePathfinderByRole.remove(role);
-		bumpCycleLastLaunchTickByRole.remove(role);
-		bumpCyclePhaseByRole.put(role, BumpCyclePhase.SCORE_HUB);
-	} // End enterBumpCycleScoreHubFromTravel
+		twoPathCyclePathfindLegStartTickByRole.remove(role);
+		clearTwoPathCycleNav(role);
+		twoPathCycleFollowPointsByRole.remove(role);
+		twoPathCycleFollowIndexByRole.remove(role);
+		twoPathCyclePathfinderByRole.remove(role);
+		twoPathCycleLastLaunchTickByRole.remove(role);
+		twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.SCORE_HUB);
+	} // End enterTwoPathCycleScoreHubFromTravel
 
 	/**
-	 * Clears follow/nav state and sets pathfind phase from current X: alliance strip → {@link
-	 * BumpCyclePhase#PATHFIND_TO_A2N_START}, otherwise {@link BumpCyclePhase#PATHFIND_TO_N2A_START} (same rule as cold
-	 * start).
+	 * Picks {@link ExtraSimTwoPathCyclePhase#PATHFIND_TO_PATHONE} or {@link ExtraSimTwoPathCyclePhase#PATHFIND_TO_PATHTWO}
+	 * from whichever path holonomic start is closer in translation (ties favor path one).
 	 */
-	private void bumpCycleBeginPathfindFromCurrentZone(int role, SimFullFieldExtraRobot extraRobot, boolean redAlliance) {
-		bumpCyclePathfindLegStartTickByRole.remove(role);
-		clearCycleNav(role);
-		bumpCycleFollowPointsByRole.remove(role);
-		bumpCycleFollowIndexByRole.remove(role);
-		bumpCyclePathfinderByRole.remove(role);
-		bumpCycleLastLaunchTickByRole.remove(role);
+	private static ExtraSimTwoPathCyclePhase pathfindPhaseForCloserHolonomicStart(
+			Pose2d robotPose, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		Pose2d startOne = pathOne.getStartingHolonomicPose().orElse(new Pose2d());
+		Pose2d startTwo = pathTwo.getStartingHolonomicPose().orElse(new Pose2d());
+		double d1 = robotPose.getTranslation().getDistance(startOne.getTranslation());
+		double d2 = robotPose.getTranslation().getDistance(startTwo.getTranslation());
+		return d1 <= d2 ? ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHONE : ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHTWO;
+	} // End pathfindPhaseForCloserHolonomicStart
+
+	/**
+	 * Clears follow/nav state and sets pathfind phase from whichever holonomic path start is closer to the robot.
+	 */
+	private void twoPathCycleBeginPathfindFromCloserHolonomicStart(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		twoPathCyclePathfindLegStartTickByRole.remove(role);
+		clearTwoPathCycleNav(role);
+		twoPathCycleFollowPointsByRole.remove(role);
+		twoPathCycleFollowIndexByRole.remove(role);
+		twoPathCyclePathfinderByRole.remove(role);
+		twoPathCycleLastLaunchTickByRole.remove(role);
 		Pose2d pose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-		BumpCyclePhase next = AllianceUtil.isInAllianceZone(pose.getX(), redAlliance)
-				? BumpCyclePhase.PATHFIND_TO_A2N_START
-				: BumpCyclePhase.PATHFIND_TO_N2A_START;
-		bumpCyclePhaseByRole.put(role, next);
-	} // End bumpCycleBeginPathfindFromCurrentZone
+		twoPathCyclePhaseByRole.put(role, pathfindPhaseForCloserHolonomicStart(pose, pathOne, pathTwo));
+	} // End twoPathCycleBeginPathfindFromCloserHolonomicStart
 
 	/**
-	 * Leaves {@link BumpCyclePhase#SCORE_HUB} when alliance zone or hub shift gate fails; resumes pathfind from zone.
+	 * Leaves {@link ExtraSimTwoPathCyclePhase#SCORE_HUB} when alliance zone or hub shift gate fails; resumes pathfind
+	 * toward the nearer holonomic start.
 	 */
-	private void exitBumpCycleScoreHubToBumpCycle(int role, SimFullFieldExtraRobot extraRobot, boolean redAlliance) {
+	private void exitTwoPathCycleScoreHubToTravel(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
 		extraRobot.drive.stop();
-		bumpCycleBeginPathfindFromCurrentZone(role, extraRobot, redAlliance);
-	} // End exitBumpCycleScoreHubToBumpCycle
+		twoPathCycleBeginPathfindFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
+	} // End exitTwoPathCycleScoreHubToTravel
 
 	/**
 	 * Loads bump PathPlanner paths from deploy once; sets {@link #bumpPathsLoadError} on failure.
@@ -712,10 +760,10 @@ public final class SimFullFieldExtraBehaviourSim {
 			}
 			bumpPathsLoadAttempted = true;
 			try {
-				bumpA2nBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_PATH_ALLIANCE_TO_NEUTRAL);
-				bumpN2aBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_PATH_NEUTRAL_TO_ALLIANCE);
-				bumpA2nRedAuthoring = bumpA2nBlueAuthoring.flipPath();
-				bumpN2aRedAuthoring = bumpN2aBlueAuthoring.flipPath();
+				bumpPathOneBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_CYCLE_PATH_ONE_DEPLOY_STEM);
+				bumpPathTwoBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_CYCLE_PATH_TWO_DEPLOY_STEM);
+				bumpPathOneRedAuthoring = bumpPathOneBlueAuthoring.flipPath();
+				bumpPathTwoRedAuthoring = bumpPathTwoBlueAuthoring.flipPath();
 			} catch (Exception ex) {
 				bumpPathsLoadError = ex.getMessage();
 				DriverStation.reportError("SimFullFieldExtra bump paths: " + ex.getMessage(), false);
@@ -725,28 +773,22 @@ public final class SimFullFieldExtraBehaviourSim {
 
 	/**
 	 * @param redAlliance true for red alliance field frame
-	 * @return cached alliance-to-neutral path, or null if paths never loaded
+	 * @return cached bump path one, or null if paths never loaded
 	 */
-	private static PathPlannerPath bumpA2nForAlliance(boolean redAlliance) {
-		return redAlliance ? bumpA2nRedAuthoring : bumpA2nBlueAuthoring;
-	} // End bumpA2nForAlliance
+	private static PathPlannerPath bumpDeployPathOneForAlliance(boolean redAlliance) {
+		return redAlliance ? bumpPathOneRedAuthoring : bumpPathOneBlueAuthoring;
+	} // End bumpDeployPathOneForAlliance
 
 	/**
 	 * @param redAlliance true for red alliance field frame
-	 * @return cached neutral-to-alliance path, or null if paths never loaded
+	 * @return cached bump path two, or null if paths never loaded
 	 */
-	private static PathPlannerPath bumpN2aForAlliance(boolean redAlliance) {
-		return redAlliance ? bumpN2aRedAuthoring : bumpN2aBlueAuthoring;
-	} // End bumpN2aForAlliance
+	private static PathPlannerPath bumpDeployPathTwoForAlliance(boolean redAlliance) {
+		return redAlliance ? bumpPathTwoRedAuthoring : bumpPathTwoBlueAuthoring;
+	} // End bumpDeployPathTwoForAlliance
 
 	/**
-	 * Runs one tick of {@link #OPTION_CYCLE_BUMP}: pathfind to path starts, follow authored samples, then hub
-	 * scoring when allowed.
-	 *
-	 * @param role fixed extra role id
-	 * @param extraRobot drive and pose for this extra
-	 * @param fuelSim fuel simulation, or null when disabled
-	 * @param fuelSimEnabled when false, {@link #runBumpHubScoringTick} no-ops inside
+	 * Runs one tick of {@link #OPTION_CYCLE_BUMP} using the deployed bump paths as {@code pathOne} / {@code pathTwo}.
 	 */
 	private void runBumpCycleSim(
 			int role,
@@ -755,24 +797,102 @@ public final class SimFullFieldExtraBehaviourSim {
 			boolean fuelSimEnabled) {
 		ensureBumpCyclePathsLoaded();
 		boolean red = roleIsRedAlliance(role);
-		PathPlannerPath a2n = bumpA2nForAlliance(red);
-		PathPlannerPath n2a = bumpN2aForAlliance(red);
-		if (a2n == null || n2a == null) {
+		PathPlannerPath pathOne = bumpDeployPathOneForAlliance(red);
+		PathPlannerPath pathTwo = bumpDeployPathTwoForAlliance(red);
+		if (pathOne == null || pathTwo == null) {
 			if (bumpPathsLoadError != null) {
 				Logger.recordOutput("SimFullFieldExtra/" + role + "/BumpCycle/LoadError", bumpPathsLoadError);
 			}
 			extraRobot.drive.stop();
 			return;
 		}
-		BumpCyclePhase phase = bumpCyclePhaseByRole.get(role);
+		runTwoPathCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, pathOne, pathTwo, "BumpCycle");
+	} // End runBumpCycleSim
+
+	/**
+	 * Loads trench PathPlanner paths from deploy once; sets {@link #trenchPathsLoadError} on failure.
+	 */
+	private static void ensureTrenchCyclePathsLoaded() {
+		if (trenchPathsLoadAttempted) {
+			return;
+		}
+		synchronized (SimFullFieldExtraBehaviourSim.class) {
+			if (trenchPathsLoadAttempted) {
+				return;
+			}
+			trenchPathsLoadAttempted = true;
+			try {
+				trenchPathOneBlueAuthoring = PathPlannerPath.fromPathFile(TRENCH_CYCLE_PATH_ONE_DEPLOY_STEM);
+				trenchPathTwoBlueAuthoring = PathPlannerPath.fromPathFile(TRENCH_CYCLE_PATH_TWO_DEPLOY_STEM);
+				trenchPathOneRedAuthoring = trenchPathOneBlueAuthoring.flipPath();
+				trenchPathTwoRedAuthoring = trenchPathTwoBlueAuthoring.flipPath();
+			} catch (Exception ex) {
+				trenchPathsLoadError = ex.getMessage();
+				DriverStation.reportError("SimFullFieldExtra trench paths: " + ex.getMessage(), false);
+			}
+		}
+	} // End ensureTrenchCyclePathsLoaded
+
+	/**
+	 * @param redAlliance true for red alliance field frame
+	 * @return cached trench path one, or null if paths never loaded
+	 */
+	private static PathPlannerPath trenchDeployPathOneForAlliance(boolean redAlliance) {
+		return redAlliance ? trenchPathOneRedAuthoring : trenchPathOneBlueAuthoring;
+	} // End trenchDeployPathOneForAlliance
+
+	/**
+	 * @param redAlliance true for red alliance field frame
+	 * @return cached trench path two, or null if paths never loaded
+	 */
+	private static PathPlannerPath trenchDeployPathTwoForAlliance(boolean redAlliance) {
+		return redAlliance ? trenchPathTwoRedAuthoring : trenchPathTwoBlueAuthoring;
+	} // End trenchDeployPathTwoForAlliance
+
+	/**
+	 * Runs one tick of {@link #OPTION_CYCLE_TRENCH} using {@code AllianceWallSweep} and {@code NeutralZoneSweep} as
+	 * {@code pathOne} / {@code pathTwo}.
+	 */
+	private void runTrenchCycleSim(
+			int role,
+			SimFullFieldExtraRobot extraRobot,
+			FuelSim fuelSim,
+			boolean fuelSimEnabled) {
+		ensureTrenchCyclePathsLoaded();
+		boolean red = roleIsRedAlliance(role);
+		PathPlannerPath pathOne = trenchDeployPathOneForAlliance(red);
+		PathPlannerPath pathTwo = trenchDeployPathTwoForAlliance(red);
+		if (pathOne == null || pathTwo == null) {
+			if (trenchPathsLoadError != null) {
+				Logger.recordOutput("SimFullFieldExtra/" + role + "/TrenchCycle/LoadError", trenchPathsLoadError);
+			}
+			extraRobot.drive.stop();
+			return;
+		}
+		runTwoPathCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, pathOne, pathTwo, "TrenchCycle");
+	} // End runTrenchCycleSim
+
+	/**
+	 * Runs one tick of a two-leg cycle: pathfind to each holonomic path start, follow authored samples, then hub
+	 * scoring when allowed. Cold start, pathfind timeout, and resume-after-travel pick the nearer holonomic start
+	 * between {@code pathOne} and {@code pathTwo}.
+	 *
+	 * @param telemetryName logger subfolder under {@code SimFullFieldExtra/{role}/}
+	 */
+	private void runTwoPathCycleSim(
+			int role,
+			SimFullFieldExtraRobot extraRobot,
+			FuelSim fuelSim,
+			boolean fuelSimEnabled,
+			PathPlannerPath pathOne,
+			PathPlannerPath pathTwo,
+			String telemetryName) {
+		boolean red = roleIsRedAlliance(role);
+		ExtraSimTwoPathCyclePhase phase = twoPathCyclePhaseByRole.get(role);
 		if (phase == null) {
 			Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-			boolean inOwnAllianceZone = AllianceUtil.isInAllianceZone(selfPose.getX(), red);
-			// Start at neutral leg when not already home; otherwise open with alliance-to-neutral leg.
-			phase = inOwnAllianceZone
-					? BumpCyclePhase.PATHFIND_TO_A2N_START
-					: BumpCyclePhase.PATHFIND_TO_N2A_START;
-			bumpCyclePhaseByRole.put(role, phase);
+			phase = pathfindPhaseForCloserHolonomicStart(selfPose, pathOne, pathTwo);
+			twoPathCyclePhaseByRole.put(role, phase);
 		}
 		Pose2d poseForScoreHubGate = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
 		boolean inAllianceZoneForScoreHub =
@@ -784,94 +904,96 @@ public final class SimFullFieldExtraBehaviourSim {
 		}
 		boolean hasCarriedFuelForScoreHubGate = carriedFuelForScoreHubGate > 0;
 		boolean scoreHubGate = inAllianceZoneForScoreHub && theirHubShift && hasCarriedFuelForScoreHubGate;
-		if (scoreHubGate && phase != BumpCyclePhase.SCORE_HUB) {
-			enterBumpCycleScoreHubFromTravel(role, extraRobot);
-			phase = BumpCyclePhase.SCORE_HUB;
-		} else if (!scoreHubGate && phase == BumpCyclePhase.SCORE_HUB) {
-			exitBumpCycleScoreHubToBumpCycle(role, extraRobot, red);
-			phase = bumpCyclePhaseByRole.get(role);
+		// Do not abort an in-progress authored spline follow; score hub is entered after follow completes or from pathfind.
+		boolean onSplineFollowLeg =
+				phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE
+						|| phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO;
+		if (scoreHubGate && phase != ExtraSimTwoPathCyclePhase.SCORE_HUB && !onSplineFollowLeg) {
+			enterTwoPathCycleScoreHubFromTravel(role, extraRobot);
+			phase = ExtraSimTwoPathCyclePhase.SCORE_HUB;
+		} else if (!scoreHubGate && phase == ExtraSimTwoPathCyclePhase.SCORE_HUB) {
+			exitTwoPathCycleScoreHubToTravel(role, extraRobot, pathOne, pathTwo);
+			phase = twoPathCyclePhaseByRole.get(role);
 		}
-		Logger.recordOutput("SimFullFieldExtra/" + role + "/BumpCycle/Phase", phase.name());
+		Logger.recordOutput("SimFullFieldExtra/" + role + "/" + telemetryName + "/Phase", phase.name());
 
 		switch (phase) {
-			case PATHFIND_TO_A2N_START:
-				if (pathfindTowardHolonomicPathStart(role, extraRobot, a2n)) {
-					bumpCyclePathfindLegStartTickByRole.remove(role);
-					clearCycleNav(role);
-					beginBumpFollow(role, a2n);
-					bumpCyclePhaseByRole.put(role, BumpCyclePhase.FOLLOW_A2N);
+			case PATHFIND_TO_PATHONE:
+				if (pathfindTowardHolonomicPathStart(role, extraRobot, pathOne)) {
+					twoPathCyclePathfindLegStartTickByRole.remove(role);
+					clearTwoPathCycleNav(role);
+					beginTwoPathCycleFollow(role, pathOne);
+					twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE);
 				} else {
-					bumpCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
-					int legStart = bumpCyclePathfindLegStartTickByRole.get(role);
-					if (behaviorTickCounter - legStart >= kBumpCyclePathfindStartTimeoutTicks) {
-						reevaluateBumpCyclePathfindPhaseFromZone(role, extraRobot, red);
+					twoPathCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
+					int legStart = twoPathCyclePathfindLegStartTickByRole.get(role);
+					if (behaviorTickCounter - legStart >= kTwoPathCyclePathfindStartTimeoutTicks) {
+						reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
 					}
 				}
 				break;
-			case FOLLOW_A2N:
-				if (advanceBumpFollow(extraRobot, role)) {
-					clearCycleNav(role);
-					bumpCyclePathfindLegStartTickByRole.remove(role);
-					bumpCyclePhaseByRole.put(role, BumpCyclePhase.PATHFIND_TO_N2A_START);
+			case FOLLOW_PATHONE:
+				if (advanceTwoPathCycleFollow(extraRobot, role)) {
+					clearTwoPathCycleNav(role);
+					twoPathCyclePathfindLegStartTickByRole.remove(role);
+					twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHTWO);
 				}
 				break;
-			case PATHFIND_TO_N2A_START:
-				if (pathfindTowardHolonomicPathStart(role, extraRobot, n2a)) {
-					bumpCyclePathfindLegStartTickByRole.remove(role);
-					clearCycleNav(role);
-					beginBumpFollow(role, n2a);
-					bumpCyclePhaseByRole.put(role, BumpCyclePhase.FOLLOW_N2A);
+			case PATHFIND_TO_PATHTWO:
+				if (pathfindTowardHolonomicPathStart(role, extraRobot, pathTwo)) {
+					twoPathCyclePathfindLegStartTickByRole.remove(role);
+					clearTwoPathCycleNav(role);
+					beginTwoPathCycleFollow(role, pathTwo);
+					twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO);
 				} else {
-					bumpCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
-					int legStart = bumpCyclePathfindLegStartTickByRole.get(role);
-					if (behaviorTickCounter - legStart >= kBumpCyclePathfindStartTimeoutTicks) {
-						reevaluateBumpCyclePathfindPhaseFromZone(role, extraRobot, red);
+					twoPathCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
+					int legStart = twoPathCyclePathfindLegStartTickByRole.get(role);
+					if (behaviorTickCounter - legStart >= kTwoPathCyclePathfindStartTimeoutTicks) {
+						reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
 					}
 				}
 				break;
-			case FOLLOW_N2A:
-				if (advanceBumpFollow(extraRobot, role)) {
+			case FOLLOW_PATHTWO:
+				if (advanceTwoPathCycleFollow(extraRobot, role)) {
 					if (scoreHubGate) {
-						enterBumpCycleScoreHubFromTravel(role, extraRobot);
+						enterTwoPathCycleScoreHubFromTravel(role, extraRobot);
 					} else {
 						extraRobot.drive.stop();
-						bumpCycleBeginPathfindFromCurrentZone(role, extraRobot, red);
+						twoPathCycleBeginPathfindFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
 					}
 				}
 				break;
 			case SCORE_HUB:
-				runBumpHubScoringTick(role, extraRobot, fuelSim, fuelSimEnabled, red);
+				runTwoPathCycleHubScoringTick(role, extraRobot, fuelSim, fuelSimEnabled, red);
 				break;
 			default:
 				extraRobot.drive.stop();
 				break;
 		}
-	} // End runBumpCycleSim
+	} // End runTwoPathCycleSim
 
 	/**
-	 * After {@link #kBumpCyclePathfindStartTimeoutTicks} without reaching holonomic start, clears nav cache and sets
-	 * pathfind phase from {@link AllianceUtil#isInAllianceZone(double, boolean)} (same rule as first entering the
-	 * bump cycle).
+	 * After {@link #kTwoPathCyclePathfindStartTimeoutTicks} without reaching holonomic start, clears nav cache and sets
+	 * pathfind phase from whichever holonomic start is closer (same rule as cold start).
 	 */
-	private void reevaluateBumpCyclePathfindPhaseFromZone(int role, SimFullFieldExtraRobot extraRobot, boolean redAlliance) {
-		clearCycleNav(role);
-		bumpCyclePathfindLegStartTickByRole.remove(role);
+	private void reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		clearTwoPathCycleNav(role);
+		twoPathCyclePathfindLegStartTickByRole.remove(role);
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-		boolean inOwnAllianceZone = AllianceUtil.isInAllianceZone(selfPose.getX(), redAlliance);
-		BumpCyclePhase next = inOwnAllianceZone ? BumpCyclePhase.PATHFIND_TO_A2N_START : BumpCyclePhase.PATHFIND_TO_N2A_START;
-		bumpCyclePhaseByRole.put(role, next);
-	} // End reevaluateBumpCyclePathfindPhaseFromZone
+		twoPathCyclePhaseByRole.put(role, pathfindPhaseForCloserHolonomicStart(selfPose, pathOne, pathTwo));
+	} // End reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart
 
 	/** Drops cached AD-star path segments for this role so the next pathfind leg replans cleanly. */
-	private void clearCycleNav(int role) {
-		bumpCyclePathByRole.remove(role);
-		bumpCycleLastGoalByRole.remove(role);
-	} // End clearCycleNav
+	private void clearTwoPathCycleNav(int role) {
+		twoPathCyclePathByRole.remove(role);
+		twoPathCycleLastGoalByRole.remove(role);
+	} // End clearTwoPathCycleNav
 
 	/**
-	 * Drives toward the holonomic start pose of an authored path using the {@link #OPTION_CYCLE_BUMP} navgrid maps.
+	 * Drives toward the holonomic start pose of an authored path using the two-path-cycle navgrid maps.
 	 *
-	 * @return true when the robot translation is within {@link #kBumpCyclePathStartArriveMeters} of the start
+	 * @return true when the robot translation is within {@link #kTwoPathCyclePathStartArriveMeters} of the start
 	 */
 	private boolean pathfindTowardHolonomicPathStart(int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath authoredPath) {
 		Pose2d goalPose = authoredPath.getStartingHolonomicPose().orElse(new Pose2d());
@@ -880,18 +1002,18 @@ public final class SimFullFieldExtraBehaviourSim {
 				role,
 				selfPose,
 				goalPose,
-				kBumpCyclePathConstraints,
+				kTwoPathCyclePathConstraints,
 				kPrimeReplanTicks,
 				kPrimePhaseTicks,
-				bumpCyclePathfinderByRole,
-				bumpCyclePathByRole,
-				bumpCycleLastGoalByRole);
+				twoPathCyclePathfinderByRole,
+				twoPathCyclePathByRole,
+				twoPathCycleLastGoalByRole);
 		Pose2d driveTargetPose = goalPose;
 		if (navPath != null) {
 			driveTargetPose = choosePathTargetPose(navPath, selfPose, goalPose);
 		}
-		driveBumpCycleFieldCentric(extraRobot, selfPose, driveTargetPose, goalPose.getRotation().getRadians());
-		return selfPose.getTranslation().getDistance(goalPose.getTranslation()) <= kBumpCyclePathStartArriveMeters;
+		driveTwoPathCycleFieldCentric(extraRobot, selfPose, driveTargetPose, goalPose.getRotation().getRadians());
+		return selfPose.getTranslation().getDistance(goalPose.getTranslation()) <= kTwoPathCyclePathStartArriveMeters;
 	} // End pathfindTowardHolonomicPathStart
 
 	/**
@@ -900,49 +1022,49 @@ public final class SimFullFieldExtraBehaviourSim {
 	 * @param role role key for per-role follow storage
 	 * @param authoredPath PathPlanner path whose samples are followed in field frame
 	 */
-	private void beginBumpFollow(int role, PathPlannerPath authoredPath) {
+	private void beginTwoPathCycleFollow(int role, PathPlannerPath authoredPath) {
 		List<Translation2d> points = new ArrayList<>();
 		for (PathPoint pathPoint : authoredPath.getAllPathPoints()) {
 			points.add(pathPoint.position);
 		}
-		bumpCycleFollowPointsByRole.put(role, points);
-		bumpCycleFollowIndexByRole.put(role, 0);
-	} // End beginBumpFollow
+		twoPathCycleFollowPointsByRole.put(role, points);
+		twoPathCycleFollowIndexByRole.put(role, 0);
+	} // End beginTwoPathCycleFollow
 
 	/**
 	 * Steers toward the current follow sample; advances the index when inside tolerance.
 	 *
 	 * @return true when the last sample is reached within tolerance, or when there are no samples
 	 */
-	private boolean advanceBumpFollow(SimFullFieldExtraRobot extraRobot, int role) {
-		List<Translation2d> points = bumpCycleFollowPointsByRole.get(role);
+	private boolean advanceTwoPathCycleFollow(SimFullFieldExtraRobot extraRobot, int role) {
+		List<Translation2d> points = twoPathCycleFollowPointsByRole.get(role);
 		if (points == null || points.isEmpty()) {
 			return true;
 		}
-		int index = bumpCycleFollowIndexByRole.getOrDefault(role, 0);
+		int index = twoPathCycleFollowIndexByRole.getOrDefault(role, 0);
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
 		Translation2d target = points.get(Math.min(index, points.size() - 1));
 		double distance = selfPose.getTranslation().getDistance(target);
-		if (distance < kBumpCycleFollowWaypointToleranceMeters) {
+		if (distance < kTwoPathCycleFollowWaypointToleranceMeters) {
 			if (index >= points.size() - 1) {
 				return true;
 			}
-			bumpCycleFollowIndexByRole.put(role, index + 1);
+			twoPathCycleFollowIndexByRole.put(role, index + 1);
 			return false;
 		}
 		double headingRad = Math.atan2(target.getY() - selfPose.getY(), target.getX() - selfPose.getX());
-		driveBumpCycleFieldCentric(
+		driveTwoPathCycleFieldCentric(
 				extraRobot,
 				selfPose,
 				new Pose2d(target, Rotation2d.fromRadians(headingRad)),
 				headingRad);
 		return false;
-	} // End advanceBumpFollow
+	} // End advanceTwoPathCycleFollow
 
 	/**
 	 * Field-centric P drive toward {@code targetPose} while tracking {@code headingGoalRad}.
 	 */
-	private void driveBumpCycleFieldCentric(
+	private void driveTwoPathCycleFieldCentric(
 			SimFullFieldExtraRobot extraRobot,
 			Pose2d selfPose,
 			Pose2d targetPose,
@@ -950,20 +1072,20 @@ public final class SimFullFieldExtraBehaviourSim {
 		double xErrorMeters = targetPose.getX() - selfPose.getX();
 		double yErrorMeters = targetPose.getY() - selfPose.getY();
 		double vxMetersPerSec = MathUtil.clamp(
-				xErrorMeters * kBumpCycleFollowLinearP,
-				-kBumpCycleFollowMaxLinearMetersPerSec,
-				kBumpCycleFollowMaxLinearMetersPerSec);
+				xErrorMeters * kTwoPathCycleFollowLinearP,
+				-kTwoPathCycleFollowMaxLinearMetersPerSec,
+				kTwoPathCycleFollowMaxLinearMetersPerSec);
 		double vyMetersPerSec = MathUtil.clamp(
-				yErrorMeters * kBumpCycleFollowLinearP,
-				-kBumpCycleFollowMaxLinearMetersPerSec,
-				kBumpCycleFollowMaxLinearMetersPerSec);
+				yErrorMeters * kTwoPathCycleFollowLinearP,
+				-kTwoPathCycleFollowMaxLinearMetersPerSec,
+				kTwoPathCycleFollowMaxLinearMetersPerSec);
 		double headingErrorRad = MathUtil.angleModulus(headingGoalRad - selfPose.getRotation().getRadians());
 		double omegaRadPerSec = MathUtil.clamp(
-				headingErrorRad * kBumpCycleFollowOmegaP,
-				-kBumpCycleFollowMaxOmegaRadPerSec,
-				kBumpCycleFollowMaxOmegaRadPerSec);
+				headingErrorRad * kTwoPathCycleFollowOmegaP,
+				-kTwoPathCycleFollowMaxOmegaRadPerSec,
+				kTwoPathCycleFollowMaxOmegaRadPerSec);
 		extraRobot.drive.driveFieldCentric(vxMetersPerSec, vyMetersPerSec, omegaRadPerSec);
-	} // End driveBumpCycleFieldCentric
+	} // End driveTwoPathCycleFieldCentric
 
 	/**
 	 * Aims the whole robot like a fixed forward turret and launches one fuel when facing, timing, and fuel state allow.
@@ -973,7 +1095,7 @@ public final class SimFullFieldExtraBehaviourSim {
 	 *
 	 * @param redAlliance selects red vs blue funnel-top hub target
 	 */
-	private void runBumpHubScoringTick(
+	private void runTwoPathCycleHubScoringTick(
 			int role,
 			SimFullFieldExtraRobot extraRobot,
 			FuelSim fuelSim,
@@ -1017,17 +1139,17 @@ public final class SimFullFieldExtraBehaviourSim {
 
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
 		double headingGoalRad = selfPose.getRotation().getRadians() + turretYawRobotRad;
-		driveBumpCycleFieldCentric(
+		driveTwoPathCycleFieldCentric(
 				extraRobot,
 				selfPose,
 				new Pose2d(selfPose.getTranslation(), Rotation2d.fromRadians(headingGoalRad)),
 				headingGoalRad);
 
-		if (Math.abs(turretYawRobotRad) > kBumpCycleScoreFacingToleranceRad) {
+		if (Math.abs(turretYawRobotRad) > kTwoPathCycleScoreFacingToleranceRad) {
 			return;
 		}
-		int lastLaunchTick = bumpCycleLastLaunchTickByRole.getOrDefault(role, -1_000_000);
-		if (behaviorTickCounter - lastLaunchTick < kBumpCycleScoreLaunchIntervalTicks) {
+		int lastLaunchTick = twoPathCycleLastLaunchTickByRole.getOrDefault(role, -1_000_000);
+		if (behaviorTickCounter - lastLaunchTick < kTwoPathCycleScoreLaunchIntervalTicks) {
 			return;
 		}
 
@@ -1048,8 +1170,8 @@ public final class SimFullFieldExtraBehaviourSim {
 				Radians.of(fuelSimElevationRad),
 				Radians.of(turretYawRobotRad),
 				ShooterConstants.robotToTurret);
-		bumpCycleLastLaunchTickByRole.put(role, behaviorTickCounter);
-	} // End runBumpHubScoringTick
+		twoPathCycleLastLaunchTickByRole.put(role, behaviorTickCounter);
+	} // End runTwoPathCycleHubScoringTick
 
 	private static int indexForRole(int role) {
 		for (int i = 0; i < EXTRA_ROLES.length; i++) {
