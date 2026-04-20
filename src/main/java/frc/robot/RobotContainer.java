@@ -1,4 +1,3 @@
-// Copyright (c) 2021-2026 Littleton Robotics
 // http://github.com/Mechanical-Advantage
 //
 // Use of this source code is governed by a BSD
@@ -84,7 +83,7 @@ public class RobotContainer {
 	private boolean isAgitatorEnabled = true;
 	private boolean isTransferEnabled = true;
 	private boolean isTurretEnabled 	= true;
-	private boolean isHoodEnabled 		= false;
+	private boolean isHoodEnabled 		= true;
 	private boolean isFlywheelEnabled = true;
 	private boolean isHangEnabled 		= true;
 
@@ -560,21 +559,21 @@ public class RobotContainer {
 				Commands.runOnce(() -> operatorManualOverride = true),
 				() -> operatorManualOverride));
 
-		// Agitator Manual Voltage Control
-		// Raise Agitator voltage
+		// Hood Manual Voltage Control
+		//
 		operatorController.y().onTrue(
 			new ConditionalCommand(
-				Commands.runOnce(() -> agitator.stepVoltage(AgitatorConstants.kStepVolts), agitator),
+				Commands.runOnce(() -> hood.stepPositionRad(HoodConstants.kStepAngleRads), hood),
 				new InstantCommand(),
-				() -> (operatorManualOverride && agitator != null)
+				() -> (operatorManualOverride && hood != null)
 			)
 		);
 		// Lower Agitator voltage
 		operatorController.a().onTrue(
 			new ConditionalCommand(
-				Commands.runOnce(() -> agitator.stepVoltage(-AgitatorConstants.kStepVolts), agitator),
+				Commands.runOnce(() -> hood.stepPositionRad(-HoodConstants.kStepAngleRads), hood),
 				new InstantCommand(),
-				() -> (operatorManualOverride && agitator != null)
+				() -> (operatorManualOverride && hood != null)
 			)
 		);
 

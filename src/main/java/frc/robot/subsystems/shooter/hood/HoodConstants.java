@@ -44,6 +44,8 @@ public final class HoodConstants { // XXX: Add correct values
 
   /** Minimum Hood angle. */
   public static final double kMinAngleRad = Units.degreesToRadians(25.0);
+
+  public static final double kStepAngleRads = Units.degreesToRadians(2.0);
   
   /** Maximum Hood angle. */
   public static final double kMaxAngleRad = Units.degreesToRadians(10.0);

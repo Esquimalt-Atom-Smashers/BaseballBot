@@ -4,6 +4,7 @@ import static frc.robot.subsystems.shooter.flywheel.FlywheelConstants.kIdleVeloc
 import static frc.robot.subsystems.shooter.hood.HoodConstants.*;
 
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -27,6 +28,7 @@ public class Hood extends SubsystemBase {
 
   private State state = State.IDLE;
   private double targetAngleRad = kDisabledAngleRad;
+  private double lastTargetAngleRad = kDisabledAngleRad;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Hood(HoodIO io) {
@@ -55,6 +57,12 @@ public class Hood extends SubsystemBase {
       hoodIO.stop();
       return;
     }
+
+    if (targetAngleRad != lastTargetAngleRad) {
+      setState(State.POSITIONING);
+    }
+
+    lastTargetAngleRad = targetAngleRad;
 
     if (!atTarget() && state == State.AT_POSITION) {
       state = State.POSITIONING;
@@ -95,7 +103,7 @@ public class Hood extends SubsystemBase {
 
   /** Set the target angle. Clamped to min/max in periodic. */
   public void setTargetAngleRad(double targetRad) {
-    targetAngleRad = targetRad;
+    targetAngleRad = clampTargetAngle(targetRad);
   } // End setTargetAngleRad
 
   /** Whether the Hood is at the target angle within tolerance. */
@@ -119,4 +127,10 @@ public class Hood extends SubsystemBase {
   public void setIgnoreLimitsSupplier(BooleanSupplier supplier) {
     ignoreLimitsSupplier = supplier != null ? supplier : () -> false;
   } // End setIgnoreLimitsSupplier
+
+  /** Step the target position in Turret frame. */
+  public void stepPositionRad(double stepPositionRad) {
+    setTargetAngleRad(getAngleRad() + stepPositionRad);
+    state = State.MANUAL;
+  } // End stepPositionRad
 }
