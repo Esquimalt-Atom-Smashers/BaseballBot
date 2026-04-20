@@ -53,6 +53,7 @@ import frc.robot.subsystems.hang.*;
 import frc.robot.simulation.SecondSimRobotBundle;
 import frc.robot.simulation.SecondSimRobotOutputs;
 import frc.robot.simulation.SimFullFieldExtraRobot;
+import frc.robot.simulation.SimFullFieldExtraBehaviourSim;
 import frc.robot.simulation.SimSecondRobotHost;
 import frc.robot.simulation.SimSecondRobotSession;
 import frc.robot.simulation.SimStartingPoseFullFieldSim;
@@ -164,6 +165,10 @@ public class RobotContainer {
 
 	/** Null unless {@link Constants.Mode#SIM}: choosers, apply/reset, full-field Maple extras. */
 	private SimStartingPoseFullFieldSim simSpawnSim = null;
+	/** Null unless {@link Constants.Mode#SIM}: behavior chooser manager for extra robots only. */
+	private SimFullFieldExtraBehaviourSim simExtraBehaviorSim = null;
+	/** Pool-indexed full-field extras built by {@link #createSimFullFieldExtraRobotBody(int, Pose2d)}. */
+	private final SimFullFieldExtraRobot[] extraRobotsByPool = new SimFullFieldExtraRobot[5];
 
 	/** Field Reset SmartDashboard Key */
 	private static final String SIM_RESET_SIMULATION_FIELD_KEY = "SimField/ResetSimulationField";
@@ -282,6 +287,8 @@ public class RobotContainer {
 				
 				simSpawnSim = new SimStartingPoseFullFieldSim(this::createSimFullFieldExtraRobotBody);
 				simSpawnSim.init();
+				simExtraBehaviorSim = new SimFullFieldExtraBehaviourSim();
+				simExtraBehaviorSim.init();
 				break;
 
 			// Replayed Robot, disable IO implementations
@@ -1060,6 +1067,7 @@ public class RobotContainer {
 
 		pollResetSimulationFieldDashboardButton();
 
+		simExtraBehaviorSim.pollResetToDefaults(true);
 		simSpawnSim.pollResetToDefaults(true, SimSecondRobotSession::forceModeDisableViaNt);
 		simSecondRobotSession.poll(
 				simSecondRobotHost,
@@ -1073,6 +1081,7 @@ public class RobotContainer {
 				simSecondRobotSession.isDriveEnabledFromDashboard(),
 				simSecondRobotSession.isRedAlliance());
 		pollSimStartingPosesApplyButton();
+		updateFullFieldExtraRobotBehaviors();
 
 		boolean extenderExtendedForCollision = extender.getState() == Extender.State.EXTENDED;
 		if (extenderExtendedForCollision != driveSimCollisionExtenderExtended) {
@@ -1182,6 +1191,28 @@ public class RobotContainer {
 				simSecondRobotSession.isDriveEnabledFromDashboard(),
 				simSecondRobotSession.isRedAlliance());
 	} // End updateSimulation
+
+	/** Updates extra robot behaviors. */
+	private void updateFullFieldExtraRobotBehaviors() {
+		if (simSpawnSim == null || !simSpawnSim.extrasEnabled()) {
+			return;
+		}
+
+		Pose2d primaryPose = driveSimulation.getSimulatedDriveTrainPose();
+		Pose2d secondSimPose = null;
+		if (secondSimBundle != null && simSecondRobotSession.isDriveEnabledFromDashboard()) {
+			secondSimPose = secondSimBundle.driveSimulation.getSimulatedDriveTrainPose();
+		}
+
+		simExtraBehaviorSim.updateExtraRobotBehaviors(
+				extraRobotsByPool,
+				simSpawnSim.extrasEnabled(),
+				simSecondRobotSession.isDriveEnabledFromDashboard(),
+				simSecondRobotSession.isRedAlliance(),
+				DriverStation.isTeleopEnabled(),
+				primaryPose,
+				secondSimPose);
+	} // End updateFullFieldExtraRobotBehaviors
 
 	/// ------------------------------------------------ Second Sim Robot -----------------------------------------------
 	private SecondSimRobotBundle assembleSecondSimRobotBundle() {
@@ -1307,6 +1338,9 @@ public class RobotContainer {
 		fullFieldExtraRobot.drive.setDefaultCommand(Commands.run(fullFieldExtraRobot.drive::stop, fullFieldExtraRobot.drive));
 		if (fuelSimEnabled) {
 			registerFuelSimRobotBody(fullFieldExtraRobot.drive, true, fullFieldExtraRobot.driveSimulation);
+		}
+		if (poolIdx >= 0 && poolIdx < extraRobotsByPool.length) {
+			extraRobotsByPool[poolIdx] = fullFieldExtraRobot;
 		}
 		return fullFieldExtraRobot;
 	} // End createSimFullFieldExtraRobotBody
