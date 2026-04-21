@@ -94,8 +94,8 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final double kDefenseAggressiveBackoffDistanceMeters = 2.0;
 	/** Delay after ram contact before switching to backoff (1.0s @ 20ms loop). */
 	private static final int kDefenseAggressiveBackoffDelayTicks = 53;
-	/** Backoff abort timeout so a stuck backoff resumes chase (5.0s @ 20ms loop). */
-	private static final int kDefenseAggressiveBackoffTimeoutTicks = 250;
+	/** Backoff abort timeout so a stuck backoff resumes chase (1.22s @ 20ms loop). */
+	private static final int kDefenseAggressiveBackoffTimeoutTicks = 61;
 	/** Separation after contact latch that cancels countdown and resumes chase. */
 	private static final double kDefenseAggressiveContactReleaseDistanceMeters = 2.2;
 	/** Position tolerance to finish backoff and start next ram. */
@@ -123,7 +123,7 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final int kTwoPathCycleScoreLaunchIntervalTicks = 5;
 	/** Max |heading error| (rad) before a hub launch is allowed. */
 	private static final double kTwoPathCycleScoreFacingToleranceRad = 0.14;
-	/** After losing facing tolerance, keep launching for this many sim ticks once shooting already started (0.5s @ 20ms). */
+	/** After losing facing tolerance, keep launching for this many sim ticks once shooting already started (0.62s @ 20ms). */
 	private static final int kTwoPathCycleScoreAimLossGraceTicks = 31;
 	/** Sim ticks without reaching holonomic start before re-picking the closer-start leg (2.0 s @ 20 ms loop). */
 	private static final int kTwoPathCyclePathfindStartTimeoutTicks = 100;
