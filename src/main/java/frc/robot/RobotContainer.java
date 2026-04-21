@@ -93,7 +93,7 @@ public class RobotContainer {
 	// Simulation Toggle
 	private boolean halfFuelOnly 			= false;
 	private boolean shooterSimEnabled	= true;
-	private boolean fuelSimEnabled 		= false;
+	private boolean fuelSimEnabled 		= true;
 
 	// Subsystems
 	private final Drive drive;

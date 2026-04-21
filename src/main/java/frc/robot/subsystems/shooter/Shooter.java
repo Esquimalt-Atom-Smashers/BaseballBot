@@ -34,7 +34,7 @@ public class Shooter extends SubsystemBase {
   private BooleanSupplier shootCommandScheduledSupplier = () -> false;
   /** Set by ShootWhenReadyCommand in initialize/end so active is true when running. */
   private volatile boolean shootCommandActive = false;
-  /** When true, ShooterCommands.setShooterTarget will not apply calculator to Hood/Flywheel (Manual Override). */
+  /** When true, ShooterCommands.setShooterTarget will not apply calculator to Hood/Flywheel (Manual Override). Hood angle from the calculator is applied only when ShootWhenReady is active ({@link #isShootCommandActive()}). */
   private BooleanSupplier manualOverrideSupplier = () -> false;
 
   /** Supplies whether this robot uses red-side field conventions (hub X, zones). */
@@ -132,13 +132,21 @@ public class Shooter extends SubsystemBase {
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTargetWithinGracePeriod", !(flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec));
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelNotIdle", flywheel.getState() != State.IDLE);
 
-    ShooterCommands.setShooterTarget(drive, turret, hood, flywheel, hoodEnabled, !manualOverrideSupplier.getAsBoolean(), logRoot);
+    ShooterCommands.setShooterTarget(
+        drive,
+        turret,
+        hood,
+        flywheel,
+        hoodEnabled,
+        !manualOverrideSupplier.getAsBoolean(),
+        isShootCommandActive(),
+        logRoot);
   } // End periodic
 
   /**
    * Turret target in range and on target, Flywheel not Idle and at target speed (with {@link
-   * ShooterConstants#kFlywheelOffTargetGraceSec} grace after leaving target speed); (Optional) Hood at target. When
-   * shooter target is hub, robot must be in alliance zone and at least {@link
+   * ShooterConstants#kFlywheelOffTargetGraceSec} grace after leaving target speed); (Optional) Hood at target
+   * elevation. When shooter target is hub, robot must be in alliance zone and at least {@link
    * ShooterConstants#kMinHubAutoshootDistanceM} from hub center.
    */
   public boolean isReadyToShoot() {

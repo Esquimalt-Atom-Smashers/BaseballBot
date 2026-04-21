@@ -23,14 +23,14 @@ public final class ShooterLookup {
     }
   }
 
-  /** Result of a lookup: hood angle (rad) and flywheel velocity (rad/s). */
+  /** Result of a lookup: hood elevation from horizontal (rad) and flywheel velocity (rad/s). */
   public record Result(double angleRad, double velocityRadsPerSec) {}
 
-  /** Distance (m), Hood Angle (deg), Flywheel Velocity (rpm) */
+  /** Distance (m), Hood elevation from horizontal (deg), Flywheel Velocity (rpm) */
   private static final Entry[] TABLE = {
-    Entry.of(2.0, 25.0, 3000.0),
-    Entry.of(4.0, 35.0, 3500.0),
-    Entry.of(6.0, 45.0, 4000.0),
+    Entry.of(2.0, 80.0, 3000.0),
+    Entry.of(4.0, 65.0, 3500.0),
+    Entry.of(6.0, 50.0, 4000.0),
   };
 
   static {
@@ -38,7 +38,7 @@ public final class ShooterLookup {
   }
 
   /**
-   * Get Hood angle and Flywheel velocity for a given distance to hub (meters).
+   * Get hood elevation from horizontal and flywheel velocity for a given distance to hub (meters).
    * Linear interpolation between table rows; outside range clamps to first/last row.
    */
   public static Result get(double distanceMeters) {

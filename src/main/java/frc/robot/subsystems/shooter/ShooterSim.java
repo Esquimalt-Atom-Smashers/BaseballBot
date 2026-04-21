@@ -95,11 +95,10 @@ public class ShooterSim {
     if (launchSpawnsInFuelSim) {
       if (fuelStored == 0) return;
       fuelStored--;
-      double elevationRad = Math.PI / 2 - hoodAngleRad;
       fuelSim.launchFuel(
           fuelRobotIndex,
           MetersPerSecond.of(ballExitVelMps),
-          Radians.of(elevationRad),
+          Radians.of(hoodAngleRad),
           Radians.of(turretYawRad),
           ShooterConstants.robotToTurret);
     } else if (ghostFuelVisualizer != null) {

@@ -10,7 +10,6 @@ import frc.robot.subsystems.shooter.ShooterCalculator;
 import frc.robot.subsystems.shooter.ShooterCalculator.ShotData;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.flywheel.Flywheel;
-import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.subsystems.shooter.flywheel.FlywheelConstants;
 import frc.robot.subsystems.shooter.hood.Hood;
@@ -169,17 +168,28 @@ public final class ShooterCommands {
 
   /**
    * Sets Hood and Flywheel target from ShooterCalculator. When hoodEnabled is false, uses a fixed
-   * Hood angle and solves for velocity only so the shot matches the locked Hood. When true, uses
-   * funnel clearance + moving shot. Applies phase delay, then iterative moving shot; clamps Hood to
-   * mechanism limits. Turret aim uses predicted target and shortest-path azimuth.
+   * Hood elevation and solves for velocity only. When true, uses funnel clearance + moving shot.
+   * Applies phase delay, then iterative moving shot; clamps Hood to mechanism limits.
+   * Turret aim uses predicted target and shortest-path azimuth.
    * When {@code enableCalculator} is false (e.g. manual override), Hood and Flywheel targets are
    * not updated so manual override controls are functional.
+   * When {@code shootWhenReadyActive} is false and {@code hoodEnabled} is true, Hood target is held at
+   * {@link HoodConstants#kMaxAngleRad}; calculator hood angle is applied only while ShootWhenReady is active
+   * ({@link frc.robot.subsystems.shooter.Shooter#isShootCommandActive()}).
    *
    * @param calculatorLogRoot AdvantageKit prefix; primary {@code ""}, second sim {@link
    *     SecondSimRobotOutputs#LOG_ROOT_PREFIX}. Calculator outputs log under {@code calculatorLogRoot + "Shooter/…"}.
    *     SmartDashboard calculator tuning uses the same {@code Shooter/…} keys for both robots.
    */
-  public static void setShooterTarget(Drive drive, Turret turret, Hood hood, Flywheel flywheel, boolean hoodEnabled, boolean enableCalculator, String calculatorLogRoot) {
+  public static void setShooterTarget(
+      Drive drive,
+      Turret turret,
+      Hood hood,
+      Flywheel flywheel,
+      boolean hoodEnabled,
+      boolean enableCalculator,
+      boolean shootWhenReadyActive,
+      String calculatorLogRoot) {
     String logRoot = calculatorLogRoot != null ? calculatorLogRoot : "";
 
     Pose2d pose = drive.getPose();
@@ -227,18 +237,20 @@ public final class ShooterCommands {
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityMps", exitVelMps);
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditive", exitVelocityMultiplierAdditive);
 
-    double hoodAngleRad =
-        MathUtil.clamp(
-            shot.getHoodAngle().in(Radians),
-            HoodConstants.kMinAngleRad,
-            HoodConstants.kMaxAngleRad);
+    double hoodAngleRad = hood.clampTargetAngle(shot.getHoodAngle().in(Radians));
     if (enableCalculator) {
-      hood.setTargetAngleRad(hoodAngleRad);
+      if (hoodEnabled) {
+        if (shootWhenReadyActive) {
+          hood.setTargetAngleRad(hoodAngleRad);
+        } else {
+          hood.setTargetAngleRad(HoodConstants.kMaxAngleRad);
+        }
+      }
       flywheel.setTargetVelocityRadPerSec(flywheelRadPerSec);
     }
 
     // We provide the turret "current angle" to the calculator in the turret's internal frame
-    // so shortest-path selection respects kMinAngleRad/kMaxAngleRad.
+    // so shortest-path selection respects TurretConstants travel limits.
     double targetAimOffsetDegAdditive = SmartDashboard.getNumber(kTargetAimOffsetDegKey, kDefaultTargetAimOffsetDeg);
     lastTurretAngleFromShotByDrive.put(
         drive,

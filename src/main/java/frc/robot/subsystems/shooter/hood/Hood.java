@@ -62,23 +62,21 @@ public class Hood extends SubsystemBase {
       return;
     }
 
-    if (targetAngleRad != lastTargetAngleRad) {
+    // Update the target position.
+    targetAngleRad = getSetpointRad();
+
+    if (targetAngleRad != lastTargetAngleRad && state != State.MANUAL) {
       setState(State.TRACKING);
     }
-
     lastTargetAngleRad = targetAngleRad;
 
     if (!atTarget() && state == State.AT_TARGET) {
       state = State.TRACKING;
-    }
-    else if (atTarget() && state == State.TRACKING) {
+    } else if (atTarget() && state == State.TRACKING) {
       state = State.AT_TARGET;
     }
 
-    state = ignoreLimitsSupplier.getAsBoolean() ? State.MANUAL : (atTarget() ? State.AT_TARGET : State.TRACKING);
-
-    // Set the Hood target position based on the current state.
-    hoodIO.setTargetPosition(state == State.IDLE ? kDisabledAngleRad : getTargetAngleRad());
+    hoodIO.setTargetPosition(state == State.IDLE ? kDisabledAngleRad : getSetpointRad());
   } // End periodic
 
   /** Set the Hood state. */
@@ -96,28 +94,31 @@ public class Hood extends SubsystemBase {
     return hoodInputs.positionRads;
   } // End getAngleRad
 
-  /** Get the current target angle. */
+  /** Current target elevation from horizontal (radians). */
   public double getTargetAngleRad() {
     return targetAngleRad;
   } // End getTargetAngleRad
 
-  /** Set the target angle. Clamped to min/max in periodic. */
+  /**
+   * Set target elevation (rad from horizontal). Clamped to travel limits unless {@link #setIgnoreLimitsSupplier}
+   * is true.
+   */
   public void setTargetAngleRad(double targetRad) {
-    targetAngleRad = clampTargetAngle(targetRad);
+    targetAngleRad = ignoreLimitsSupplier.getAsBoolean() ? targetRad : clampTargetAngle(targetRad);
   } // End setTargetAngleRad
 
   /** Whether the Hood is at the target angle within tolerance. */
   public boolean atTarget() {
-    return Math.abs(getAngleRad() - getSetpointRad()) <= kAtTargetToleranceRad;
+    return Math.abs(getAngleRad() - targetAngleRad) <= kAtTargetToleranceRad;
   } // End atTarget
 
 
   /** Clamp a target angle to mechanical limits. */
   public double clampTargetAngle(double targetRad) {
-    return MathUtil.clamp(targetRad, kMaxAngleRad, kMinAngleRad);
+    return MathUtil.clamp(targetRad, kMinAngleRad, kMaxAngleRad);
   } // End clampTargetAngle
 
-  /** Get target angle, clamped to hood travel limits. */
+  /** Get target angle, clamped to hood travel limits after applying limits when override is off. */
   private double getSetpointRad() {
     return ignoreLimitsSupplier.getAsBoolean() ? targetAngleRad : clampTargetAngle(targetAngleRad);
   } // End getSetpointRad

@@ -45,14 +45,14 @@ public final class HoodConstants { // XXX: Add correct values
   public static final int kSignalsPeriodMs = 19;
   public static final int kEncoderVelocitySignalPeriodMs = 19;
 
-  /** Hood angle when the Hood is disabled/locked. */
-  public static final double kDisabledAngleRad = Units.degreesToRadians(25.0);
+  /** Hood elevation when the Hood is disabled/locked. */
+  public static final double kDisabledAngleRad = Units.degreesToRadians(80.0);
 
-  /** Minimum Hood angle. */
-  public static final double kMinAngleRad = Units.degreesToRadians(25.0);
-  
-  /** Maximum Hood angle. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(10.0);
+  /** Minimum travel elevation (deg from horizontal); shallower shot. */
+  public static final double kMinAngleRad = Units.degreesToRadians(50.0);
+
+  /** Maximum travel elevation (deg from horizontal); steeper shot. */
+  public static final double kMaxAngleRad = Units.degreesToRadians(80.0);
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;

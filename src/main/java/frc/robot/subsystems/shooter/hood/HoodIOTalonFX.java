@@ -8,6 +8,7 @@ import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.PositionVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.StatusCode;
 import edu.wpi.first.math.util.Units;
 import frc.robot.generated.TunerConstants;
@@ -23,11 +24,15 @@ public class HoodIOTalonFX implements HoodIO {
 
     var talonFxConfig = new TalonFXConfiguration();
     talonFxConfig.MotorOutput.NeutralMode = kNeutralMode;
+    talonFxConfig.MotorOutput.Inverted =
+      kMotorInverted ? InvertedValue.Clockwise_Positive : InvertedValue.CounterClockwise_Positive;
     talonFxConfig.CurrentLimits.StatorCurrentLimitEnable = true;
     talonFxConfig.CurrentLimits.StatorCurrentLimit = kStatorCurrentLimitAmps;
+
     talonFxConfig.Slot0.kP = kP;
     talonFxConfig.Slot0.kI = kI;
     talonFxConfig.Slot0.kD = kD;
+    
     tryUntilOk(5, () -> motor.getConfigurator().apply(talonFxConfig, 0.25));
   } // End HoodIOTalonFX Constructor
 
