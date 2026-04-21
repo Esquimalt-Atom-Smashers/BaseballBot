@@ -38,8 +38,8 @@ public final class ShooterCommands {
     SmartDashboard.putNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
   }
 
-  /** Which passing spot is selected; null = aim at hub. */
-  private static volatile PassingSpot passingSpotOverride = null;
+  /** Per-{@link Drive} passing spot override; null/absent = aim at hub. */
+  private static final Map<Drive, PassingSpot> passingSpotOverrideByDrive = new IdentityHashMap<>();
 
   /**
    * Per-{@link Drive} turret angle from last {@link #setShooterTarget} for that drive (moving shot). Static singleton
@@ -74,29 +74,37 @@ public final class ShooterCommands {
     RIGHT
   }
 
-  /** Set target to passing spot left (alliance-relative). */
-  public static void setPassingSpotLeft() {
-    passingSpotOverride = PassingSpot.LEFT;
+  /** Set target to passing spot left (alliance-relative) for this drivetrain. */
+  public static void setPassingSpotLeft(Drive drive) {
+    if (drive != null) {
+      passingSpotOverrideByDrive.put(drive, PassingSpot.LEFT);
+    }
   }
 
-  /** Set target to passing spot center (alliance-relative). */
-  public static void setPassingSpotCenter() {
-    passingSpotOverride = PassingSpot.CENTER;
+  /** Set target to passing spot center (alliance-relative) for this drivetrain. */
+  public static void setPassingSpotCenter(Drive drive) {
+    if (drive != null) {
+      passingSpotOverrideByDrive.put(drive, PassingSpot.CENTER);
+    }
   }
 
-  /** Set target to passing spot right (alliance-relative). */
-  public static void setPassingSpotRight() {
-    passingSpotOverride = PassingSpot.RIGHT;
+  /** Set target to passing spot right (alliance-relative) for this drivetrain. */
+  public static void setPassingSpotRight(Drive drive) {
+    if (drive != null) {
+      passingSpotOverrideByDrive.put(drive, PassingSpot.RIGHT);
+    }
   }
 
-  /** Clear override so Shooter returns to hub. */
-  public static void clearShooterTargetOverride() {
-    passingSpotOverride = null;
+  /** Clear override so Shooter returns to hub for this drivetrain. */
+  public static void clearShooterTargetOverride(Drive drive) {
+    if (drive != null) {
+      passingSpotOverrideByDrive.remove(drive);
+    }
   }
 
-  /** True if current target is the hub (no passing-spot override). */
-  public static boolean isShooterTargetHub() {
-    return passingSpotOverride == null;
+  /** True if current target is the hub (no passing-spot override) for this drivetrain. */
+  public static boolean isShooterTargetHub(Drive drive) {
+    return drive == null || passingSpotOverrideByDrive.get(drive) == null;
   }
 
   private static Translation3d getPassingSpot3d(PassingSpot spot, boolean redAlliance) {
@@ -111,16 +119,16 @@ public final class ShooterCommands {
   /** Current Shooter target for this drivetrain: passing spot or alliance hub (funnel top). */
   public static Translation3d getShooterTarget3d(Drive drive) {
     boolean isRedAllianceForTarget = isRedAllianceForShooterTarget(drive);
-    PassingSpot spot = passingSpotOverride;
+    PassingSpot spot = passingSpotOverrideByDrive.get(drive);
     if (spot != null) return getPassingSpot3d(spot, isRedAllianceForTarget);
     return isRedAllianceForTarget
         ? FieldConstants.RED_FUNNEL_TOP_CENTER_3D
         : FieldConstants.BLUE_FUNNEL_TOP_CENTER_3D;
   } // End getShooterTarget3d
 
-  /** Get current target for logging. */
-  public static String getShooterTargetName() {
-    PassingSpot spot = passingSpotOverride;
+  /** Get current target for logging for this drivetrain. */
+  public static String getShooterTargetName(Drive drive) {
+    PassingSpot spot = passingSpotOverrideByDrive.get(drive);
     if (spot == null) return "Hub";
     return switch (spot) {
       case LEFT -> "Passing Left";

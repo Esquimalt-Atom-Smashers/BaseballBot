@@ -120,10 +120,10 @@ public class Shooter extends SubsystemBase {
       flywheelOffTargetGraceTimerSec += dtSec;
     }
 
-    Logger.recordOutput(logRoot + "ShooterCommand/Target", ShooterCommands.getShooterTargetName());
+    Logger.recordOutput(logRoot + "ShooterCommand/Target", ShooterCommands.getShooterTargetName(drive));
     Logger.recordOutput(logRoot + "ShooterCommand/ShootWhenReadyCommandActive", shootCommandScheduledSupplier.getAsBoolean() || shootCommandActive);
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/IsReadyToShoot", isReadyToShoot());
-    Logger.recordOutput(logRoot + "ShooterCommand/Ready/AllianceZoneOk", !ShooterCommands.isShooterTargetHub() || AllianceUtil.isInAllianceZone(drive.getPose().getX(), isRedAllianceSupplier.getAsBoolean()));
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/AllianceZoneOk", !ShooterCommands.isShooterTargetHub(drive) || AllianceUtil.isInAllianceZone(drive.getPose().getX(), isRedAllianceSupplier.getAsBoolean()));
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/HubMinDistanceOk", hubAutoshootDistanceOk());
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/TurretTargetInRange", turret.isTargetInRange());
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/TurretAtTarget", turret.atTarget());
@@ -142,7 +142,7 @@ public class Shooter extends SubsystemBase {
    * ShooterConstants#kMinHubAutoshootDistanceM} from hub center.
    */
   public boolean isReadyToShoot() {
-    if (ShooterCommands.isShooterTargetHub()) {
+    if (ShooterCommands.isShooterTargetHub(drive)) {
       if (!AllianceUtil.isInAllianceZone(drive.getPose().getX(), isRedAllianceSupplier.getAsBoolean())) {
         return false;
       }
@@ -160,7 +160,7 @@ public class Shooter extends SubsystemBase {
 
   /** True if not shooting at hub, or robot is far enough from the alliance hub for autoshoot. */
   private boolean hubAutoshootDistanceOk() {
-    if (!ShooterCommands.isShooterTargetHub()) {
+    if (!ShooterCommands.isShooterTargetHub(drive)) {
       return true;
     }
     Translation2d hubCenter = isRedAllianceSupplier.getAsBoolean()

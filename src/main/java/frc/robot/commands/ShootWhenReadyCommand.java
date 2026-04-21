@@ -6,6 +6,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.FieldConstants;
 import frc.robot.subsystems.agitator.Agitator;
+import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.transfer.Transfer;
@@ -22,16 +23,18 @@ public class ShootWhenReadyCommand extends Command {
   private final Agitator agitator;
   private final Transfer transfer;
   private final Shooter shooter;
+  private final Drive drive;
 
   private boolean transferOn = false;
   private double timerSec = 0.0;
 
   private final Supplier<Pose2d> position;
 
-  public ShootWhenReadyCommand(Agitator agitator, Transfer transfer, Shooter shooter, Supplier<Pose2d> position) {
+  public ShootWhenReadyCommand(Agitator agitator, Transfer transfer, Shooter shooter, Drive drive, Supplier<Pose2d> position) {
     this.agitator = agitator;
     this.transfer = transfer;
     this.shooter = shooter;
+    this.drive = drive;
     this.position = position;
     addRequirements(agitator, transfer, shooter);
   } // End ShootWhenReadyCommand Constructor
@@ -49,7 +52,7 @@ public class ShootWhenReadyCommand extends Command {
     if (shooter.autoSelectShootingTarget) {
       automaticallySelectShootingTarget();
     } else {
-      ShooterCommands.clearShooterTargetOverride();
+      ShooterCommands.clearShooterTargetOverride(drive);
     }
 
     if (!shooter.isReadyToShoot()) {
@@ -76,15 +79,15 @@ public class ShootWhenReadyCommand extends Command {
   private void automaticallySelectShootingTarget() {
     Pose2d pose = position.get();
     if (isInAllianceZoneWithTolerance(pose.getX())) {
-      ShooterCommands.clearShooterTargetOverride();
+      ShooterCommands.clearShooterTargetOverride(drive);
     } else {
       boolean aboveCenterY = pose.getY() > FieldConstants.FIELD_CENTER_Y_M;
       // Passing spots are alliance-relative; red LEFT/RIGHT are Y-mirrored vs blue.
       boolean passLeft = aboveCenterY ^ shooter.isOnRedAllianceSide();
       if (passLeft) {
-        ShooterCommands.setPassingSpotLeft();
+        ShooterCommands.setPassingSpotLeft(drive);
       } else {
-        ShooterCommands.setPassingSpotRight();
+        ShooterCommands.setPassingSpotRight(drive);
       }
     }
   }

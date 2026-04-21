@@ -316,7 +316,7 @@ public class RobotContainer {
 
 		// Shooter coordinator and shoot-when-ready command
 		shooter = new Shooter(drive, agitator, transfer, turret, hood, flywheel, isHoodEnabled);
-		shootWhenReadyCommand = new ShootWhenReadyCommand(agitator, transfer, shooter, () -> drive.getPose());
+		shootWhenReadyCommand = new ShootWhenReadyCommand(agitator, transfer, shooter, drive, () -> drive.getPose());
 
 		shooter.setShootCommandScheduledSupplier(shootWhenReadyCommand::isScheduled);
 		shooter.setManualOverrideSupplier(() -> operatorManualOverride);
@@ -778,10 +778,10 @@ public class RobotContainer {
 		NamedCommands.registerCommand("Flywheel Off", Commands.runOnce(() -> flywheel.setState(Flywheel.State.IDLE), flywheel));
 
 		// Shooter Target Commands
-		NamedCommands.registerCommand("Set Shooter Target Hub", Commands.runOnce(ShooterCommands::clearShooterTargetOverride));
-		NamedCommands.registerCommand("Set Shooter Target Passing Spot Left", Commands.runOnce(ShooterCommands::setPassingSpotLeft));
-		NamedCommands.registerCommand("Set Shooter Target Passing Spot Center", Commands.runOnce(ShooterCommands::setPassingSpotCenter));
-		NamedCommands.registerCommand("Set Shooter Target Passing Spot Right", Commands.runOnce(ShooterCommands::setPassingSpotRight));
+		NamedCommands.registerCommand("Set Shooter Target Hub", Commands.runOnce(() -> ShooterCommands.clearShooterTargetOverride(drive)));
+		NamedCommands.registerCommand("Set Shooter Target Passing Spot Left", Commands.runOnce(() -> ShooterCommands.setPassingSpotLeft(drive)));
+		NamedCommands.registerCommand("Set Shooter Target Passing Spot Center", Commands.runOnce(() -> ShooterCommands.setPassingSpotCenter(drive)));
+		NamedCommands.registerCommand("Set Shooter Target Passing Spot Right", Commands.runOnce(() -> ShooterCommands.setPassingSpotRight(drive)));
 		// With timeout so the sequential auto can advance to path commands (reference codebases build autos in code with paths only)
 		NamedCommands.registerCommand("Shoot When Ready", Commands.runOnce(() -> CommandScheduler.getInstance().schedule(shootWhenReadyCommand)));
 		NamedCommands.registerCommand("Cancel Shoot When Ready", Commands.runOnce(() -> CommandScheduler.getInstance().cancel(shootWhenReadyCommand)));
@@ -1409,7 +1409,7 @@ public class RobotContainer {
 		secondSimRobotBundle.shooter = new Shooter(secondSimRobotBundle.drive, secondSimRobotBundle.agitator, secondSimRobotBundle.transfer,
 				secondSimRobotBundle.turret, secondSimRobotBundle.hood, secondSimRobotBundle.flywheel, isHoodEnabled, SecondSimRobotOutputs.LOG_ROOT_PREFIX);
 		secondSimRobotBundle.shootWhenReady =
-				new ShootWhenReadyCommand(secondSimRobotBundle.agitator, secondSimRobotBundle.transfer, secondSimRobotBundle.shooter, secondSimRobotBundle.drive::getPose);
+				new ShootWhenReadyCommand(secondSimRobotBundle.agitator, secondSimRobotBundle.transfer, secondSimRobotBundle.shooter, secondSimRobotBundle.drive, secondSimRobotBundle.drive::getPose);
 
 		secondSimRobotBundle.shooter.setShootCommandScheduledSupplier(secondSimRobotBundle.shootWhenReady::isScheduled);
 		secondSimRobotBundle.shooter.setManualOverrideSupplier(() -> operatorManualOverride);
