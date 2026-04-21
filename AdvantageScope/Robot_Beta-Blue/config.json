@@ -1,0 +1,90 @@
+{
+  "name": "Beta (Blue)",
+  "isFTC": false,
+  "rotations": [
+    {
+      "axis": "x",
+      "degrees": 90
+    },
+    {
+      "axis": "z",
+      "degrees": 90
+    }
+],
+"position": [
+    0.0,
+    0.0,
+    0.04
+],
+  "cameras": [
+    {
+      "name": "Frontcamera",
+      "fov": 70,
+      "resolution": [
+        360, 
+        180
+      ],
+      "position": [
+        0.228,
+        0,
+        0.25
+      ]
+    }
+  ],
+  "components": [
+    { 
+      "_comment": "Turret Rotation and Position",
+      "zeroedRotations": [
+        {
+          "axis": "x",
+          "degrees": 90
+        },
+        {
+          "axis": "z",
+          "degrees": 90
+        }
+      ], 
+      "zeroedPosition": [
+        0.095, 
+        0.17, 
+        -0.27
+      ] 
+    },
+    { 
+      "_comment": "Extender Rotation and Position",
+      "zeroedRotations": [
+        {
+          "axis": "x",
+          "degrees": 90
+        },
+        {
+          "axis": "z",
+          "degrees": 90
+        }
+      ], 
+      "zeroedPosition": [
+        -0.275, 
+        0, 
+        -0.155
+      ] 
+    },
+    { 
+      "_comment": "Hang Rotation and Position",
+      "zeroedRotations": [
+        {
+          "axis": "x",
+          "degrees": 90
+        },
+        {
+          "axis": "z",
+          "degrees": 90
+        }
+      ], 
+      "zeroedPosition": [
+        0.29635, 
+        -0.055, 
+        -0.175
+      ] 
+    }
+  ]
+}

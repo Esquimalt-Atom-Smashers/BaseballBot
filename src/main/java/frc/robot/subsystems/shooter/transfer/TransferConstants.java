@@ -8,7 +8,7 @@ public final class TransferConstants {
   private TransferConstants() {}
 
   /** CAN ID of the Transfer motor. */
-  public static final int kMotorId = 7;
+  public static final int kMotorId = 53;
 
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kCoast;

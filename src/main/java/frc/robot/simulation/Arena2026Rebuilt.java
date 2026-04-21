@@ -21,7 +21,6 @@ import edu.wpi.first.units.measure.Angle;
 import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import java.util.List;
 import org.dyn4j.dynamics.Settings;
 import org.ironmaple.simulation.SimulatedArena;
@@ -44,10 +43,6 @@ public class Arena2026Rebuilt extends SimulatedArena {
   protected RebuiltOutpost blueOutpost;
   protected RebuiltOutpost redOutpost;
   protected boolean isInEfficiencyMode = true;
-
-  protected static Translation2d centerPieceBottomRightCorner = new Translation2d(7.35737, 1.724406);
-  protected static Translation2d redDepotBottomRightCorner = new Translation2d(0.02, 5.53);
-  protected static Translation2d blueDepotBottomRightCorner = new Translation2d(16.0274, 1.646936);
 
   /**
    * Obstacles for the 2026 REBUILT field. When AddRampCollider is true, ramps are drivable: hub is
@@ -240,40 +235,9 @@ public class Arena2026Rebuilt extends SimulatedArena {
     blueOutpost.reset();
     redOutpost.reset();
 
-    for (int x = 0; x < 12; x += 1) {
-      for (int y = 0; y < 30; y += isInEfficiencyMode ? 3 : 1) {
-        addGamePiece(
-            new RebuiltFuelOnField(
-                centerPieceBottomRightCorner.plus(
-                    new Translation2d(Inches.of(5.991 * x), Inches.of(5.95 * y)))));
-      }
-    }
-
-    boolean isOnBlue =
-        !DriverStation.getAlliance().isEmpty()
-            && DriverStation.getAlliance().get() == Alliance.Blue;
-
-    if (isOnBlue || !isInEfficiencyMode) {
-      for (int x = 0; x < 4; x++) {
-        for (int y = 0; y < 6; y++) {
-          addGamePiece(
-              new RebuiltFuelOnField(
-                  blueDepotBottomRightCorner.plus(
-                      new Translation2d(Inches.of(5.991 * x), Inches.of(5.95 * y)))));
-        }
-      }
-    }
-
-    if (!isOnBlue || !isInEfficiencyMode) {
-      for (int x = 0; x < 4; x++) {
-        for (int y = 0; y < 6; y++) {
-          addGamePiece(
-              new RebuiltFuelOnField(
-                  redDepotBottomRightCorner.plus(
-                      new Translation2d(Inches.of(5.991 * x), Inches.of(5.95 * y)))));
-        }
-      }
-    }
+    // Field fuel is simulated only by {@link frc.robot.simulation.FuelSim} (spawn + physics +
+    // intakes). Do not add duplicate {@link RebuiltFuelOnField} dyn4j bodies here — they doubled
+    // CPU and piled on top of FuelSim.
 
     setupValueForMatchBreakdown("CurrentFuelInOutpost");
     setupValueForMatchBreakdown("TotalFuelInOutpost");

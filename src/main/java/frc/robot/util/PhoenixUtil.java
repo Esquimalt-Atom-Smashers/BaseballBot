@@ -135,7 +135,7 @@ public final class PhoenixUtil {
 						.withKA(0)
 						.withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign))
 				// Give sim modules enough current authority to reverse directions and stop quickly
-				.withSlipCurrent(Amps.of(60))
+				.withSlipCurrent(Amps.of(100))
 				// Adjust friction voltages
 				.withDriveFrictionVoltage(Volts.of(0.1))
 				.withSteerFrictionVoltage(Volts.of(0.05))

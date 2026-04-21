@@ -8,7 +8,7 @@ public final class IntakeConstants {
   private IntakeConstants() {}
 
   /** CAN ID of the Intake motor. */
-  public static final int kMotorId = 5;
+  public static final int kMotorId = 50;
 
   /** Idle behavior when output is zero (coast or brake). */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kCoast;

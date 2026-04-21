@@ -8,7 +8,7 @@ public final class AgitatorConstants {
   private AgitatorConstants() {}
 
   /** CAN ID of the Agitator motor. */
-  public static final int kMotorId = 20;
+  public static final int kMotorId = 52;
 
   /** Idle behavior when output is zero (coast or brake). */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kCoast;

@@ -40,12 +40,24 @@
             "/RealOutputs/Subsystems/Extender/Inputs",
             "/RealOutputs/Subsystems/Shooter/Flywheel",
             "/RealOutputs/Subsystems/Hang/Inputs",
-            "/RealOutputs/Subsystems/Shooter",
             "/Drive/Module0",
             "/RealOutputs/Subsystems/Drive",
             "/RealOutputs/Subsystems/Drive/Sim",
             "/RealOutputs/Subsystems/Drive/Sim/DriveSpeedMultipliers",
-            "/RealOutputs"
+            "/RealOutputs",
+            "/SmartDashboard/SimStartingPoses",
+            "/SecondSimRobotOutputs/Drive",
+            "/RealOutputs/SecondSimRobotOutputs",
+            "/RealOutputs/SecondSimRobotOutputs/FieldSimulation",
+            "/RealOutputs/SecondSimRobotOutputs/FieldSimulation/RobotPosition",
+            "/RealOutputs/Odometry",
+            "/RealOutputs/SecondSimRobotOutputs/ComponentPoses",
+            "/RealOutputs/SimFullFieldExtra",
+            "/RealOutputs/SimFullFieldExtra/5",
+            "/RealOutputs/SimFullFieldExtra/4",
+            "/RealOutputs/SimFullFieldExtra/6",
+            "/RealOutputs/SimFullFieldExtra/3",
+            "/RealOutputs/SimFullFieldExtra/6/TrenchCycle"
           ]
         },
         "tabs": {
@@ -61,24 +73,18 @@
             },
             {
               "type": 3,
-              "title": "3D Field - Scoring",
+              "title": "3D Field - Sim Robot",
               "controller": {
                 "sources": [
                   {
-                    "type": "robot",
-                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition",
-                    "logType": "Pose2d",
-                    "visible": true,
+                    "type": "trajectory",
+                    "logKey": "/RealOutputs/ShooterVisualizer/Trajectory",
+                    "logType": "Translation3d[]",
+                    "visible": false,
                     "options": {
-                      "model": "Beta"
+                      "color": "#00ff00",
+                      "size": "normal"
                     }
-                  },
-                  {
-                    "type": "component",
-                    "logKey": "/RealOutputs/ComponentPoses/Final",
-                    "logType": "Pose3d[]",
-                    "visible": true,
-                    "options": {}
                   },
                   {
                     "type": "gamePiece",
@@ -99,13 +105,114 @@
                     }
                   },
                   {
-                    "type": "trajectory",
-                    "logKey": "/RealOutputs/ShooterVisualizer/Trajectory",
-                    "logType": "Translation3d[]",
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition",
+                    "logType": "Pose2d",
                     "visible": true,
                     "options": {
-                      "color": "#00ff00",
-                      "size": "normal"
+                      "model": "Beta (Blue)"
+                    }
+                  },
+                  {
+                    "type": "component",
+                    "logKey": "/RealOutputs/ComponentPoses/Final",
+                    "logType": "Pose3d[]",
+                    "visible": true,
+                    "options": {}
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs//SecondSimRobotOutputs/FieldSimulation/RobotPosition-Blue",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "Beta (Blue)"
+                    }
+                  },
+                  {
+                    "type": "component",
+                    "logKey": "/RealOutputs//SecondSimRobotOutputs/ComponentPoses/Final",
+                    "logType": "Pose3d[]",
+                    "visible": true,
+                    "options": {}
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs//SecondSimRobotOutputs/FieldSimulation/RobotPosition-Red",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "Beta (Red)"
+                    }
+                  },
+                  {
+                    "type": "component",
+                    "logKey": "/RealOutputs//SecondSimRobotOutputs/ComponentPoses/Final",
+                    "logType": "Pose3d[]",
+                    "visible": true,
+                    "options": {}
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition-Blue-2",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "2026 KitBot"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition-Blue-3",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "2026 KitBot"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition-Red-1",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "Kitbot (Red)"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition-Red-2",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "Kitbot (Red)"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/RobotPosition-Red-3",
+                    "logType": "Pose2d",
+                    "visible": true,
+                    "options": {
+                      "model": "Kitbot (Red)"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/HubLight-Blue",
+                    "logType": "Pose3d",
+                    "visible": true,
+                    "options": {
+                      "model": "Hub (Blue)"
+                    }
+                  },
+                  {
+                    "type": "robot",
+                    "logKey": "/RealOutputs/FieldSimulation/HubLight-Red",
+                    "logType": "Pose3d",
+                    "visible": true,
+                    "options": {
+                      "model": "Hub (Red)"
                     }
                   }
                 ],
@@ -116,17 +223,17 @@
                 "cameraIndex": -1,
                 "orbitFov": 50,
                 "cameraPosition": [
-                  -12.36593324799362,
-                  8.108651049441114,
-                  0.06884625808310849
+                  -10.912885836904987,
+                  6.165216237503892,
+                  -0.7086896882598882
                 ],
                 "cameraTarget": [
-                  -4.340863079361213,
-                  0.9570091107540878,
-                  0.11014473009179518
+                  1.2307195584804742,
+                  -1.0838707225747084,
+                  -1.3266916630366767
                 ]
               },
-              "controlsHeight": 324
+              "controlsHeight": 370
             },
             {
               "type": 3,
@@ -139,7 +246,7 @@
                     "logType": "Pose2d",
                     "visible": true,
                     "options": {
-                      "model": "Beta"
+                      "model": "Beta (Blue)"
                     }
                   },
                   {
@@ -155,7 +262,7 @@
                     "logType": "Pose3d[]",
                     "visible": true,
                     "options": {
-                      "model": "2026 KitBot",
+                      "model": "Beta (Blue)",
                       "color": "#00ff00"
                     }
                   },
@@ -207,14 +314,14 @@
                 "cameraIndex": -1,
                 "orbitFov": 50,
                 "cameraPosition": [
-                  13.224677244482773,
-                  8.071327039061426,
-                  -0.19822400182343328
+                  -8.51190223579238,
+                  4.969149458226765,
+                  -4.16138857518297
                 ],
                 "cameraTarget": [
-                  0.5868962911994468,
-                  -1.9222178719802183,
-                  -0.2108960630422302
+                  2.6221527830885334,
+                  -1.2673091438604127,
+                  0.4800666429946327
                 ]
               },
               "controlsHeight": 306

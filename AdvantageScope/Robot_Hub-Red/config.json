@@ -1,0 +1,19 @@
+{
+  "name": "Hub (Red)",
+  "isFTC": false,
+  "rotations": [
+    {
+      "axis": "x",
+      "degrees": 180
+    },
+    {
+      "axis": "z",
+      "degrees": 180
+    }
+],
+"position": [
+    0.0,
+    0.0,
+    0.0
+]
+}

@@ -12,6 +12,7 @@ import static edu.wpi.first.units.Units.Radians;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
 import java.util.function.BooleanSupplier;
+
 import frc.robot.simulation.FuelSim;
 import frc.robot.subsystems.shooter.flywheel.Flywheel;
 import frc.robot.subsystems.shooter.flywheel.FlywheelConstants;
@@ -19,40 +20,59 @@ import frc.robot.subsystems.shooter.hood.Hood;
 import frc.robot.subsystems.shooter.turret.Turret;
 
 /**
- * Simulation-only coordinator for shooter fuel: tracks stored fuel when field fuel sim is on, gates
- * intake by capacity, launches into {@link FuelSim} when enabled, and drives ghost-shot logging when not.
+ * Simulation-only fuel bookkeeping and launch: stored count with {@link #CAPACITY}, optional {@link FuelSim} spawn, or
+ * optional {@link ShooterSimVisualizer} when not spawning in {@link FuelSim}.
  */
 public class ShooterSim {
 
   private static final int CAPACITY = 30;
+  public static final int kInitialFuelStored = 8;
   private static final double SHOOT_INTERVAL_SEC = 0.25;
 
   private final FuelSim fuelSim;
+  private final int fuelRobotIndex;
   private final boolean launchSpawnsInFuelSim;
-  /** When fuel sim is off, logs a flying ghost ball; may be null. */
+  /** Optional; used when {@link #launchSpawnsInFuelSim} is false; may be {@code null}. */
   private final ShooterSimVisualizer ghostFuelVisualizer;
-  private int fuelStored = 8;
+  private int fuelStored = kInitialFuelStored;
   private final Timer shootTimer = new Timer();
 
+  /** @param fuelRobotIndex {@link FuelSim} registered-robot index for {@link FuelSim#launchFuel} */
   public ShooterSim(
-      FuelSim fuelSim, boolean launchSpawnsInFuelSim, ShooterSimVisualizer ghostFuelVisualizer) {
+      FuelSim fuelSim,
+      int fuelRobotIndex,
+      boolean launchSpawnsInFuelSim,
+      ShooterSimVisualizer ghostFuelVisualizer) {
     this.fuelSim = fuelSim;
+    this.fuelRobotIndex = fuelRobotIndex;
     this.launchSpawnsInFuelSim = launchSpawnsInFuelSim;
     this.ghostFuelVisualizer = ghostFuelVisualizer;
     shootTimer.start();
+    if (launchSpawnsInFuelSim) {
+      fuelSim.setCarriedFuelCount(fuelRobotIndex, fuelStored);
+      fuelSim.registerShooterFuelReset(this::resetFuelStored);
+    }
   } // End ShooterSim Constructor
 
-  /** Stored fuel count, or {@link #CAPACITY} when field fuel sim is off (infinite-ammo mode for logging). */
+  /** Sets {@link #fuelStored} to the initial sim count (used when {@link FuelSim#resetFuel()} runs). */
+  public void resetFuelStored() {
+    fuelStored = kInitialFuelStored;
+    if (launchSpawnsInFuelSim) {
+      fuelSim.setCarriedFuelCount(fuelRobotIndex, fuelStored);
+    }
+  } // End resetFuelStored
+
+  /** @return {@link #fuelStored} when {@link #launchSpawnsInFuelSim}, otherwise {@link #CAPACITY} */
   public int getFuelStored() {
     return launchSpawnsInFuelSim ? fuelStored : CAPACITY;
   } // End getFuelStored
 
-  /** True when the Shooter can accept more fuel (for FuelSim intake gating). */
+  /** @return true when {@link #launchSpawnsInFuelSim} and {@link #fuelStored} &lt; {@link #CAPACITY} */
   public boolean canIntake() {
     return launchSpawnsInFuelSim && fuelStored < CAPACITY;
   } // End canIntake
 
-  /** Called by FuelSim when a ball is intaked; increments stored count up to {@link #CAPACITY}. */
+  /** Increments {@link #fuelStored} up to {@link #CAPACITY}. */
   public void intakeFuel() {
     if (fuelStored < CAPACITY) {
       fuelStored++;
@@ -60,20 +80,24 @@ public class ShooterSim {
   } // End intakeFuel
 
   /**
-   * Launch one fuel using current Turret, Hood, and Flywheel. With field fuel sim: requires stored
-   * fuel, decrements, spawns in FuelSim. Without: no decrement (infinite), optional ghost visual only.
+   * Computes exit speed from flywheel target and hood/turret aim, then either {@link FuelSim#launchFuel} (decrementing
+   * {@link #fuelStored} when {@link #launchSpawnsInFuelSim}) or {@link ShooterSimVisualizer#startGhostFuel} when
+   * {@link #ghostFuelVisualizer} is non-null.
    */
   public void launchFuel(Turret turret, Hood hood, Flywheel flywheel) {
     double turretYawRad = turret.getRobotFramePosition().getRadians();
     double hoodAngleRad = hood.getAngleRad();
-    double flywheelSurfaceMps = flywheel.getTargetVelocityRadPerSec() * FlywheelConstants.kFlywheelRadiusMeters;
-    double ballExitVelMps = flywheelSurfaceMps * ShooterConstants.kFlywheelSurfaceDivider;
+    double flywheelSurfaceMps = flywheel.getVelocityRadPerSec() * FlywheelConstants.kFlywheelRadiusMeters;
+    double ballExitVelMps = flywheelSurfaceMps 
+        * ShooterConstants.kFlywheelSurfaceDivider
+        * ShooterConstants.kSimFlywheelToFuelExitVelocityEfficiency;
 
     if (launchSpawnsInFuelSim) {
       if (fuelStored == 0) return;
       fuelStored--;
       double elevationRad = Math.PI / 2 - hoodAngleRad;
       fuelSim.launchFuel(
+          fuelRobotIndex,
           MetersPerSecond.of(ballExitVelMps),
           Radians.of(elevationRad),
           Radians.of(turretYawRad),
@@ -87,7 +111,8 @@ public class ShooterSim {
   } // End launchFuel
 
   /**
-   * Call from simulation periodic. Launches fuel when timer elapsed, enabled, Shooter ready, and shooting active.
+   * When {@link #shootTimer} has passed {@link #SHOOT_INTERVAL_SEC}, DS enabled, {@link Shooter#isReadyToShoot()}, and
+   * {@code isShootingActive}, runs {@link #launchFuel}.
    */
   public void update(
       Shooter shooter,

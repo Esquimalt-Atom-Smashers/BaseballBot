@@ -26,7 +26,7 @@ import frc.robot.subsystems.drive.Drive;
 import frc.robot.util.Zones;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
-import org.littletonrobotics.junction.AutoLogOutput;
+import org.littletonrobotics.junction.Logger;
 
 /** Default drive command. */
 public class TeleopDrive extends Command {
@@ -40,7 +40,12 @@ public class TeleopDrive extends Command {
   private final DoubleSupplier omegaSupplier;
   private int flipFactor = 1;
 
-  @AutoLogOutput
+  /** When true, joystick field axes are negated (red-alliance convention). */
+  private final BooleanSupplier fieldFlipTreatAsRedAlliance;
+
+  /** Prefix for {@link Logger} keys under {@code TeleopDrive/…}; empty string uses unprefixed paths. */
+  private final String logRoot;
+
   private final Trigger inTrenchZoneTrigger;
 
   /// Disabled (Bump Zone is not used)
@@ -55,24 +60,46 @@ public class TeleopDrive extends Command {
   /** When true, set DriveMode to MANUAL_OVERRIDE (Manual Override). */
   private BooleanSupplier manualOverrideSupplier = () -> false;
 
-  @AutoLogOutput
   private DriveMode currentDriveMode = DriveMode.NORMAL;
 
-  @AutoLogOutput(key = "TeleopDrive/TargetFieldRelativeSpeeds")
   private ChassisSpeeds desiredFieldSpeeds = new ChassisSpeeds();
 
-  /** Creates a new TeleopDrive. */
+  /** Field flip follows {@link DriverStation} alliance; AdvantageKit keys are {@code TeleopDrive/…} (no path prefix). */
   public TeleopDrive(
       Drive drive,
       CommandXboxController controller,
       BooleanSupplier isRobotCentricSupplier,
       BooleanSupplier isFacingHubSupplier,
       ProfiledPIDController faceTargetController) {
+    this(
+        drive,
+        controller,
+        isRobotCentricSupplier,
+        isFacingHubSupplier,
+        faceTargetController,
+        null,
+        null);
+  } // End TeleopDrive Constructor
+
+  /**
+   * @param fieldFlipTreatAsRedAlliance when non-null, supplies red-alliance field flip; otherwise {@link DriverStation} alliance is used.
+   * @param logRoot prepended to AdvantageKit keys under {@code TeleopDrive/…}; may be empty.
+   */
+  public TeleopDrive(
+      Drive drive,
+      CommandXboxController controller,
+      BooleanSupplier isRobotCentricSupplier,
+      BooleanSupplier isFacingHubSupplier,
+      ProfiledPIDController faceTargetController,
+      BooleanSupplier fieldFlipTreatAsRedAlliance,
+      String logRoot) {
     this.drive = drive;
     this.controller = controller;
     this.isRobotCentricSupplier = isRobotCentricSupplier;
     this.isFacingHubSupplier = isFacingHubSupplier;
     this.faceTargetController = faceTargetController;
+    this.fieldFlipTreatAsRedAlliance = fieldFlipTreatAsRedAlliance != null ? fieldFlipTreatAsRedAlliance : TeleopDrive::driverStationIsRedAlliance;
+    this.logRoot = logRoot != null ? logRoot : "";
     this.xSupplier = () -> -controller.getLeftY() * flipFactor;
     this.ySupplier = () -> -controller.getLeftX() * flipFactor;
     this.omegaSupplier = () -> -controller.getRightX();
@@ -99,9 +126,14 @@ public class TeleopDrive extends Command {
     addRequirements(drive);
   } // End TeleopDrive Constructor
 
-  private static Translation2d getLinearVelocityFromJoysticks(double x, double y) {
-    double linearMagnitude = MathUtil.applyDeadband(Math.hypot(x, y), ControllerConstants.CONTROLLER_DEADBAND);
-    Rotation2d linearDirection = new Rotation2d(Math.atan2(y, x));
+  private static boolean driverStationIsRedAlliance() {
+    return DriverStation.getAlliance().isPresent()
+        && DriverStation.getAlliance().get() == DriverStation.Alliance.Red;
+  } // End driverStationIsRedAlliance
+
+  private static Translation2d getLinearVelocityFromJoysticks(double joystickX, double joystickY) {
+    double linearMagnitude = MathUtil.applyDeadband(Math.hypot(joystickX, joystickY), ControllerConstants.CONTROLLER_DEADBAND);
+    Rotation2d linearDirection = new Rotation2d(Math.atan2(joystickY, joystickX));
     linearMagnitude = linearMagnitude * linearMagnitude;
     return new Pose2d(new Translation2d(), linearDirection)
         .transformBy(new Transform2d(linearMagnitude, 0.0, new Rotation2d()))
@@ -124,26 +156,22 @@ public class TeleopDrive extends Command {
   } // End getTrenchLockAngle
 
   private Rotation2d getBumpLockAngle() {
-    for (int i = -135; i < 180; i += 90) {
-      if (Math.abs(MathUtil.inputModulus(drive.getRotation().getDegrees() - i, -180, 180)) <= 45) {
-        return Rotation2d.fromDegrees(i);
+    for (int diagonalDeg = -135; diagonalDeg < 180; diagonalDeg += 90) {
+      if (Math.abs(MathUtil.inputModulus(drive.getRotation().getDegrees() - diagonalDeg, -180, 180)) <= 45) {
+        return Rotation2d.fromDegrees(diagonalDeg);
       }
     }
     return Rotation2d.kZero;
   } // End getBumpLockAngle
 
-  /** Set by RobotContainer so DriveMode is set to MANUAL_OVERRIDE */
+  /** When the supplier is true during {@link #execute}, drive mode is forced to manual override. */
   public void setManualOverrideSupplier(BooleanSupplier supplier) {
     manualOverrideSupplier = supplier != null ? supplier : () -> false;
   } // End setManualOverrideSupplier
 
   @Override
   public void initialize() {
-    flipFactor =
-        DriverStation.getAlliance().isPresent()
-                && DriverStation.getAlliance().get() == DriverStation.Alliance.Red
-            ? -1
-            : 1;
+    flipFactor = fieldFlipTreatAsRedAlliance.getAsBoolean() ? -1 : 1;
     trenchYController.reset();
     rotationController.reset();
   } // End initialize
@@ -218,6 +246,10 @@ public class TeleopDrive extends Command {
             rotSpeedToDiagonal);
         break;
     }
+
+    Logger.recordOutput(logRoot + "TeleopDrive/inTrenchZoneTrigger", inTrenchZoneTrigger.getAsBoolean());
+    Logger.recordOutput(logRoot + "TeleopDrive/currentDriveMode", currentDriveMode.toString());
+    Logger.recordOutput(logRoot + "TeleopDrive/TargetFieldRelativeSpeeds", desiredFieldSpeeds);
   } // End execute
 
   @Override

@@ -37,6 +37,12 @@ public class Shooter extends SubsystemBase {
   /** When true, ShooterCommands.setShooterTarget will not apply calculator to Hood/Flywheel (Manual Override). */
   private BooleanSupplier manualOverrideSupplier = () -> false;
 
+  /** Supplies whether this robot uses red-side field conventions (hub X, zones). */
+  private BooleanSupplier isRedAllianceSupplier = AllianceUtil::isRedAlliance;
+
+  /** Prefix for {@link Logger} keys under {@code ShooterCommand/…} and passed to {@link ShooterCommands#setShooterTarget}; empty or a segment ending with {@code '/'}. */
+  private final String logRoot;
+
   /** Will automatically select the shooting target (Hub, left/right passing zones) when true, when false it will target the hub */
   public boolean autoSelectShootingTarget = true;
 
@@ -52,6 +58,18 @@ public class Shooter extends SubsystemBase {
       Hood hood,
       Flywheel flywheel,
       boolean hoodEnabled) {
+    this(drive, agitator, transfer, turret, hood, flywheel, hoodEnabled, "");
+  } // End Shooter Constructor
+
+  public Shooter(
+      Drive drive,
+      Agitator agitator,
+      Transfer transfer,
+      Turret turret,
+      Hood hood,
+      Flywheel flywheel,
+      boolean hoodEnabled,
+      String logRoot) {
     this.drive = drive;
     this.agitator = agitator;
     this.transfer = transfer;
@@ -59,6 +77,7 @@ public class Shooter extends SubsystemBase {
     this.hood = hood;
     this.flywheel = flywheel;
     this.hoodEnabled = hoodEnabled;
+    this.logRoot = logRoot != null ? logRoot : "";
   } // End Shooter Constructor
 
   /** Set by RobotContainer so Shooter can log whether shoot-when-ready is active. */
@@ -71,12 +90,20 @@ public class Shooter extends SubsystemBase {
     manualOverrideSupplier = supplier != null ? supplier : () -> false;
   } // End setManualOverrideSupplier
 
-  /** Set by ShootWhenReadyCommand in initialize/end so active is true whenever the command is running. */
+  public void setIsRedAllianceSupplier(BooleanSupplier supplier) {
+    isRedAllianceSupplier = supplier != null ? supplier : AllianceUtil::isRedAlliance;
+  } // End setIsRedAllianceSupplier
+
+  /** @return {@link #isRedAllianceSupplier} */
+  public boolean isOnRedAllianceSide() {
+    return isRedAllianceSupplier.getAsBoolean();
+  } // End isOnRedAllianceSide
+
   public void setShootCommandActive(boolean active) {
     shootCommandActive = active;
   } // End setShootCommandActive
 
-  /** True when ShootWhenReadyCommand is running. */
+  /** @return true if {@link #shootCommandScheduledSupplier} or {@link #shootCommandActive} is true */
   public boolean isShootCommandActive() {
     return shootCommandScheduledSupplier.getAsBoolean() || shootCommandActive;
   } // End isShootCommandActive
@@ -93,19 +120,19 @@ public class Shooter extends SubsystemBase {
       flywheelOffTargetGraceTimerSec += dtSec;
     }
 
-    Logger.recordOutput("ShooterCommand/Target", ShooterCommands.getShooterTargetName());
-    Logger.recordOutput("ShooterCommand/ShootWhenReadyCommandActive", shootCommandScheduledSupplier.getAsBoolean() || shootCommandActive);
-    Logger.recordOutput("ShooterCommand/Ready/IsReadyToShoot", isReadyToShoot());
-    Logger.recordOutput("ShooterCommand/Ready/AllianceZoneOk", !ShooterCommands.isShooterTargetHub() || AllianceUtil.isInAllianceZone(drive.getPose().getX()));
-    Logger.recordOutput("ShooterCommand/Ready/HubMinDistanceOk", hubAutoshootDistanceOk());
-    Logger.recordOutput("ShooterCommand/Ready/TurretTargetInRange", turret.isTargetInRange());
-    Logger.recordOutput("ShooterCommand/Ready/TurretAtTarget", turret.atTarget());
-    Logger.recordOutput("ShooterCommand/Ready/HoodAtTarget", !hoodEnabled || hood.atTarget());
-    Logger.recordOutput("ShooterCommand/Ready/FlywheelAtTarget", flywheel.atTargetVelocity());
-    Logger.recordOutput("ShooterCommand/Ready/FlywheelAtTargetWithinGracePeriod", !(flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec));
-    Logger.recordOutput("ShooterCommand/Ready/FlywheelNotIdle", flywheel.getState() != State.IDLE);
+    Logger.recordOutput(logRoot + "ShooterCommand/Target", ShooterCommands.getShooterTargetName(drive));
+    Logger.recordOutput(logRoot + "ShooterCommand/ShootWhenReadyCommandActive", shootCommandScheduledSupplier.getAsBoolean() || shootCommandActive);
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/IsReadyToShoot", isReadyToShoot());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/AllianceZoneOk", !ShooterCommands.isShooterTargetHub(drive) || AllianceUtil.isInAllianceZone(drive.getPose().getX(), isRedAllianceSupplier.getAsBoolean()));
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/HubMinDistanceOk", hubAutoshootDistanceOk());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/TurretTargetInRange", turret.isTargetInRange());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/TurretAtTarget", turret.atTarget());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/HoodAtTarget", !hoodEnabled || hood.atTarget());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTarget", flywheel.atTargetVelocity());
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTargetWithinGracePeriod", !(flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec));
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelNotIdle", flywheel.getState() != State.IDLE);
 
-    ShooterCommands.setShooterTarget(drive, turret, hood, flywheel, hoodEnabled, !manualOverrideSupplier.getAsBoolean());
+    ShooterCommands.setShooterTarget(drive, turret, hood, flywheel, hoodEnabled, !manualOverrideSupplier.getAsBoolean(), logRoot);
   } // End periodic
 
   /**
@@ -115,8 +142,8 @@ public class Shooter extends SubsystemBase {
    * ShooterConstants#kMinHubAutoshootDistanceM} from hub center.
    */
   public boolean isReadyToShoot() {
-    if (ShooterCommands.isShooterTargetHub()) {
-      if (!AllianceUtil.isInAllianceZone(drive.getPose().getX())) {
+    if (ShooterCommands.isShooterTargetHub(drive)) {
+      if (!AllianceUtil.isInAllianceZone(drive.getPose().getX(), isRedAllianceSupplier.getAsBoolean())) {
         return false;
       }
       if (!hubAutoshootDistanceOk()) {
@@ -133,11 +160,12 @@ public class Shooter extends SubsystemBase {
 
   /** True if not shooting at hub, or robot is far enough from the alliance hub for autoshoot. */
   private boolean hubAutoshootDistanceOk() {
-    if (!ShooterCommands.isShooterTargetHub()) {
+    if (!ShooterCommands.isShooterTargetHub(drive)) {
       return true;
     }
-    Translation2d hubCenter =
-        AllianceUtil.isRedAlliance() ? FieldConstants.RED_HUB_CENTER : FieldConstants.BLUE_HUB_CENTER;
+    Translation2d hubCenter = isRedAllianceSupplier.getAsBoolean()
+        ? FieldConstants.RED_HUB_CENTER
+        : FieldConstants.BLUE_HUB_CENTER;
     return drive.getPose().getTranslation().getDistance(hubCenter) >= ShooterConstants.kMinHubAutoshootDistanceM;
   } // End hubAutoshootDistanceOk
 }

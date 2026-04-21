@@ -22,24 +22,30 @@ public class Intake extends SubsystemBase {
 
   private final IntakeIO intakeIO;
   private final IntakeIO.IntakeIOInputs intakeInputs = new IntakeIO.IntakeIOInputs();
+  private final String logRoot;
 
   private State state = State.IDLE;
   private double targetVoltage = kIdleVoltage;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Intake(IntakeIO io) {
+    this(io, "");
+  } // End Intake Constructor
+
+  public Intake(IntakeIO io, String logRoot) {
     intakeIO = io;
+    this.logRoot = logRoot;
   } // End Intake Constructor
 
   @Override
   public void periodic() {
     intakeIO.updateInputs(intakeInputs);
-    Logger.recordOutput("Subsystems/Intake/Inputs/MotorConnected", intakeInputs.motorConnected);
-    Logger.recordOutput("Subsystems/Intake/Inputs/AppliedVolts", intakeInputs.appliedVolts);
-    Logger.recordOutput("Subsystems/Intake/Inputs/SupplyCurrentAmps", intakeInputs.supplyCurrentAmps);
-    Logger.recordOutput("Subsystems/Intake/TargetVolts", getTargetVoltage());
-    Logger.recordOutput("Subsystems/Intake/IsIntaking", state.name() == State.INTAKING.name());
-    Logger.recordOutput("Subsystems/Intake/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/MotorConnected", intakeInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/AppliedVolts", intakeInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/SupplyCurrentAmps", intakeInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Intake/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Intake/IsIntaking", state.name() == State.INTAKING.name());
+    Logger.recordOutput(logRoot + "Subsystems/Intake/State", state.name());
 
     if (DriverStation.isDisabled()) {
       intakeIO.stop();

@@ -12,7 +12,7 @@ public final class TurretConstants {
   private TurretConstants() {}
 
   /** CAN ID of the Turret motor (NEO 550 on SPARK MAX or Kraken on Talon FX). */
-  public static final int kMotorId = 11;
+  public static final int kMotorId = 54;
 
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kCoast;
@@ -27,7 +27,7 @@ public final class TurretConstants {
   public static final double kStatorCurrentLimitAmps = 30.0;
 
   /** Turret radians per motor rotation (output / input). 1.0 = 1:1. */
-  public static final double kGearRatio = 25.4;
+  public static final double kGearRatio = 84.545454;
 
   /** PID gains for onboard position control. */
   public static final double kP = 14.0;
@@ -39,13 +39,13 @@ public final class TurretConstants {
   public static final int kEncoderVelocitySignalPeriodMs = 19;
   
   /** Default aim direction in robot frame (0 = forward); π = toward robot back. */
-  public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.kZero;
+  public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.kPi;
 
   /** Minimum Turret angle. */
-  public static final double kMinAngleRad = Units.degreesToRadians(-200.0);
+  public static final double kMinAngleRad = Units.degreesToRadians(-175.0);
 
   /** Maximum Turret angle. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(120.0);
+  public static final double kMaxAngleRad = Units.degreesToRadians(190.0);
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;

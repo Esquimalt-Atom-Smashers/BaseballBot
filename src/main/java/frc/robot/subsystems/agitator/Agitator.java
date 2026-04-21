@@ -22,23 +22,29 @@ public class Agitator extends SubsystemBase {
 
   private final AgitatorIO agitatorIO;
   private final AgitatorIO.AgitatorIOInputs agitatorInputs = new AgitatorIO.AgitatorIOInputs();
+  private final String logRoot;
 
   private State state = State.IDLE;
   private double targetVoltage = kIdleVoltage;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Agitator(AgitatorIO io) {
+    this(io, "");
+  } // End Agitator Constructor
+
+  public Agitator(AgitatorIO io, String logRoot) {
     agitatorIO = io;
+    this.logRoot = logRoot;
   } // End Agitator Constructor
 
   @Override
   public void periodic() {
     agitatorIO.updateInputs(agitatorInputs);
-    Logger.recordOutput("Subsystems/Agitator/Inputs/MotorConnected", agitatorInputs.motorConnected);
-    Logger.recordOutput("Subsystems/Agitator/Inputs/AppliedVolts", agitatorInputs.appliedVolts);
-    Logger.recordOutput("Subsystems/Agitator/Inputs/SupplyCurrentAmps", agitatorInputs.supplyCurrentAmps);
-    Logger.recordOutput("Subsystems/Agitator/TargetVolts", getTargetVoltage());
-    Logger.recordOutput("Subsystems/Agitator/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/MotorConnected", agitatorInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/AppliedVolts", agitatorInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/SupplyCurrentAmps", agitatorInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/State", state.name());
 
     if (DriverStation.isDisabled()) {
       agitatorIO.stop();

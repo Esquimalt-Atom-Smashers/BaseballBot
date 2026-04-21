@@ -15,6 +15,9 @@ public final class FieldConstants {
   /** Hub center height above floor. */
   private static final double HUB_CENTER_HEIGHT_M = 1.43256;
 
+  /** Hub light height above floor. */
+  public static final double HUB_LIGHT_HEIGHT_M = 1.275;
+
   /** Blue alliance hub center in 3D (x, y, z) meters for shooter ballistics. */
   public static final Translation3d BLUE_HUB_CENTER_3D =
       new Translation3d(BLUE_HUB_CENTER.getX(), BLUE_HUB_CENTER.getY(), HUB_CENTER_HEIGHT_M);
@@ -22,6 +25,14 @@ public final class FieldConstants {
   /** Red alliance hub center in 3D (x, y, z) meters for shooter ballistics. */
   public static final Translation3d RED_HUB_CENTER_3D =
       new Translation3d(RED_HUB_CENTER.getX(), RED_HUB_CENTER.getY(), HUB_CENTER_HEIGHT_M);
+
+  /** Blue alliance hub light in 3D (x, y, z) meters for shooter ballistics. */
+  public static final Translation3d BLUE_HUB_LIGHT_3D =
+      new Translation3d(BLUE_HUB_CENTER.getX(), BLUE_HUB_CENTER.getY(), HUB_LIGHT_HEIGHT_M);
+
+  /** Red alliance hub light in 3D (x, y, z) meters for shooter ballistics. */
+  public static final Translation3d RED_HUB_LIGHT_3D =
+      new Translation3d(RED_HUB_CENTER.getX(), RED_HUB_CENTER.getY(), HUB_LIGHT_HEIGHT_M);
 
   /** Funnel radius. */
   public static final double FUNNEL_RADIUS_M = 0.6096;

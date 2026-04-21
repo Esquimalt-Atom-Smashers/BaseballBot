@@ -32,14 +32,26 @@ public class Module {
   private final Alert turnEncoderDisconnectedAlert;
   private SwerveModulePosition[] odometryPositions = new SwerveModulePosition[] {};
 
+  private final String logRoot;
+
   public Module(
       ModuleIO io,
       int index,
       SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
           constants) {
+    this(io, index, constants, "");
+  } // End Module Constructor
+
+  public Module(
+      ModuleIO io,
+      int index,
+      SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+          constants,
+      String logRoot) {
     this.io = io;
     this.index = index;
     this.constants = constants;
+    this.logRoot = logRoot != null ? logRoot : "";
     driveDisconnectedAlert =
         new Alert(
             "Disconnected drive motor on module " + Integer.toString(index) + ".",
@@ -51,11 +63,11 @@ public class Module {
         new Alert(
             "Disconnected turn encoder on module " + Integer.toString(index) + ".",
             AlertType.kError);
-  }
+  } // End Module Constructor
 
   public void periodic() {
     io.updateInputs(inputs);
-    Logger.processInputs("Drive/Module" + Integer.toString(index), inputs);
+    Logger.processInputs(logRoot + "Drive/Module" + Integer.toString(index), inputs);
 
     // Calculate positions for odometry
     int sampleCount = inputs.odometryTimestamps.length; // All signals are sampled together
@@ -76,7 +88,7 @@ public class Module {
   public void runSetpoint(SwerveModuleState state) {
     // Optimize velocity setpoint
     state.optimize(getAngle());
-    state.cosineScale(inputs.turnPosition); // XXX: Consider if it should be relative or absolute (inputs.turnAbsolutePosition)
+    state.cosineScale(inputs.turnPosition);
 
     // Apply setpoints
     io.setDriveVelocity(state.speedMetersPerSecond / constants.WheelRadius);
@@ -97,12 +109,13 @@ public class Module {
 
   /** Returns the current turn angle of the module. */
   public Rotation2d getAngle() {
-    return inputs.turnPosition; // XXX: Consider if it should be relative or absolute (inputs.turnAbsolutePosition)
+    return inputs.turnPosition;
   }
 
+  /** Returns drive wheel angular velocity (rad/s). */
   public double getVelocity() {
     return inputs.driveVelocityRadPerSec;
-  } 
+  }
 
   /** Returns the current drive position of the module in meters. */
   public double getPositionMeters() {

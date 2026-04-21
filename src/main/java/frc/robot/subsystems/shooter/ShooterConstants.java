@@ -12,7 +12,6 @@ import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.util.Units;
 import static edu.wpi.first.units.Units.Seconds;
 import edu.wpi.first.units.measure.Time;
-import frc.robot.Constants;
 import frc.robot.subsystems.shooter.hood.HoodConstants;
 
 /** Constants for the Shooter assembly (Turret position on robot, camera on Turret, etc.). */
@@ -51,26 +50,15 @@ public final class ShooterConstants {
   /** Target aim offset (degrees). */
   public static final double kTargetAimOffsetDeg = 0.0;
 
-  /**
-   * Multiplier on calculator exit velocity for the Real Robot (e.g. air resistance). 1.0 = no change;
-   * increase if undershooting, decrease if overshooting.
-   */
-  public static final double kExitVelocityCompensationMultiplierReal = 1.19;
+  /** Multiplier on calculator exit velocity (e.g. air resistance). 1.0 = no change. */
+  public static final double kExitVelocityCompensationMultiplier = 1.19;
 
   /**
-   * Multiplier on calculator exit velocity for the Sim Robot (e.g. air resistance). 1.0 = no change;
-   * increase if undershooting, decrease if overshooting.
-   */  public static final double kExitVelocityCompensationMultiplierSim = 1.05;
-
-  /**
-   * Active exit-velocity multiplier for the current {@link Constants#currentMode}: Sim uses
-   * {@link #kExitVelocityCompensationMultiplierSim}; Real and Replay use {@link #kExitVelocityCompensationMultiplierReal}.
+   * Sim-only efficiency from flywheel surface speed to launched fuel speed. Models wheel slip/transfer
+   * losses so sim can share the same exit-velocity compensation as real robot.
    */
-  public static double kExitVelocityCompensationMultiplier() {
-    return Constants.currentMode == Constants.Mode.SIM
-        ? kExitVelocityCompensationMultiplierSim
-        : kExitVelocityCompensationMultiplierReal;
-  } // End exitVelocityCompensationMultiplier
+  public static final double kSimFlywheelToFuelExitVelocityEfficiency =
+      1.0 / kExitVelocityCompensationMultiplier;
 
   /**
    * Single flywheel at bottom: flywheel surface speed = exit velocity / this divider (e.g. 0.5

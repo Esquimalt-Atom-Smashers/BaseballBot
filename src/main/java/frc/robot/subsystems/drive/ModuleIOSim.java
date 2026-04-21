@@ -20,6 +20,7 @@ import com.ctre.phoenix6.controls.TorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.VoltageOut;
+import com.ctre.phoenix6.CANBus;
 import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.hardware.TalonFX;
@@ -56,9 +57,7 @@ public class ModuleIOSim implements ModuleIO {
 
   private final int moduleIndex;
 
-  private final SwerveModuleConstants<
-          TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
-      constants;
+  private final SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> constants;
 
   // Hardware objects (simulated by MapleSim)
   private final TalonFX driveTalon;
@@ -75,10 +74,8 @@ public class ModuleIOSim implements ModuleIO {
 
   // Torque-current control requests
   private final TorqueCurrentFOC torqueCurrentRequest = new TorqueCurrentFOC(0);
-  private final PositionTorqueCurrentFOC positionTorqueCurrentRequest =
-      new PositionTorqueCurrentFOC(0.0);
-  private final VelocityTorqueCurrentFOC velocityTorqueCurrentRequest =
-      new VelocityTorqueCurrentFOC(0.0);
+  private final PositionTorqueCurrentFOC positionTorqueCurrentRequest = new PositionTorqueCurrentFOC(0.0);
+  private final VelocityTorqueCurrentFOC velocityTorqueCurrentRequest = new VelocityTorqueCurrentFOC(0.0);
 
   // Inputs from drive motor
   private final StatusSignal<Angle> drivePosition;
@@ -97,6 +94,28 @@ public class ModuleIOSim implements ModuleIO {
       SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> constants,
       SwerveModuleSimulation simulation,
       int moduleIndex) {
+    this(constants, simulation, moduleIndex, TunerConstants.kCANBus, 0);
+  } // End ModuleIOSim Constructor
+
+  /** @param canBus identifier passed to {@link TalonFX} and {@link CANcoder} constructors */
+  public ModuleIOSim(
+      SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> constants,
+      SwerveModuleSimulation simulation,
+      int moduleIndex,
+      CANBus canBus) {
+    this(constants, simulation, moduleIndex, canBus, 0);
+  } // End ModuleIOSim Constructor
+
+  /**
+   * @param canBus identifier passed to {@link TalonFX} and {@link CANcoder} constructors
+   * @param deviceIdOffset added to {@code DriveMotorId}, {@code SteerMotorId}, and {@code EncoderId} from {@code constants}
+   */
+  public ModuleIOSim(
+      SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration> constants,
+      SwerveModuleSimulation simulation,
+      int moduleIndex,
+      CANBus canBus,
+      int deviceIdOffset) {
     if (moduleIndex < 0 || moduleIndex > 3) {
       throw new IllegalArgumentException("moduleIndex must be 0..3, got " + moduleIndex);
     }
@@ -105,9 +124,13 @@ public class ModuleIOSim implements ModuleIO {
     this.simulation = simulation;
     ensureDriveSpeedMultipliersInitialized();
 
-    driveTalon = new TalonFX(this.constants.DriveMotorId, TunerConstants.kCANBus);
-    turnTalon = new TalonFX(this.constants.SteerMotorId, TunerConstants.kCANBus);
-    cancoder = new CANcoder(this.constants.EncoderId, TunerConstants.kCANBus);
+    int driveMotorId = this.constants.DriveMotorId + deviceIdOffset;
+    int steerMotorId = this.constants.SteerMotorId + deviceIdOffset;
+    int encoderId = this.constants.EncoderId + deviceIdOffset;
+
+    driveTalon = new TalonFX(driveMotorId, canBus);
+    turnTalon = new TalonFX(steerMotorId, canBus);
+    cancoder = new CANcoder(encoderId, canBus);
 
     // Configure drive motor
     var driveConfig = this.constants.DriveMotorInitialConfigs;
@@ -132,7 +155,7 @@ public class ModuleIOSim implements ModuleIO {
     // chassis shake / curved drift. Softer kD and kS=0 here stabilizes azimuth without changing real-robot tuning.
     turnConfig.Slot0.withKD(0.5).withKS(0);
 
-    turnConfig.Feedback.FeedbackRemoteSensorID = this.constants.EncoderId;
+    turnConfig.Feedback.FeedbackRemoteSensorID = encoderId;
     turnConfig.Feedback.FeedbackSensorSource =
         switch (this.constants.FeedbackSource) {
           case RemoteCANcoder -> FeedbackSensorSourceValue.RemoteCANcoder;
@@ -205,10 +228,8 @@ public class ModuleIOSim implements ModuleIO {
 
     // Update drive inputs
     inputs.driveConnected = true;
-    inputs.drivePositionRad =
-        Units.rotationsToRadians(drivePosition.getValueAsDouble()) / constants.DriveMotorGearRatio;
-    inputs.driveVelocityRadPerSec =
-        Units.rotationsToRadians(driveVelocity.getValueAsDouble()) / constants.DriveMotorGearRatio;
+    inputs.drivePositionRad = Units.rotationsToRadians(drivePosition.getValueAsDouble()) / constants.DriveMotorGearRatio;
+    inputs.driveVelocityRadPerSec = Units.rotationsToRadians(driveVelocity.getValueAsDouble()) / constants.DriveMotorGearRatio;
     inputs.driveAppliedVolts = driveAppliedVolts.getValueAsDouble();
     inputs.driveCurrentAmps = driveCurrent.getValueAsDouble();
 
@@ -302,8 +323,7 @@ public class ModuleIOSim implements ModuleIO {
     turnTalon.setControl(
         switch (constants.SteerMotorClosedLoopOutput) {
           case Voltage -> positionVoltageRequest.withPosition(rotation.getRotations());
-          case TorqueCurrentFOC ->
-              positionTorqueCurrentRequest.withPosition(rotation.getRotations());
+          case TorqueCurrentFOC -> positionTorqueCurrentRequest.withPosition(rotation.getRotations());
         });
   }
 }

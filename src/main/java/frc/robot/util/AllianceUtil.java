@@ -24,7 +24,12 @@ public final class AllianceUtil {
    * ALLIANCE_ZONE_M from that alliance's driver wall).
    */
   public static boolean isInAllianceZone(double robotXM) {
-    return isRedAlliance()
+    return isInAllianceZone(robotXM, isRedAlliance());
+  } // End isInAllianceZone
+
+  /** Same as {@link #isInAllianceZone(double)} but with an explicit alliance (e.g. second sim robot). */
+  public static boolean isInAllianceZone(double robotXM, boolean redAlliance) {
+    return redAlliance
         ? robotXM >= FieldConstants.FIELD_LENGTH_M - FieldConstants.ALLIANCE_ZONE_M
         : robotXM <= FieldConstants.ALLIANCE_ZONE_M;
   } // End isInAllianceZone

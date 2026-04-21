@@ -1,14 +1,16 @@
 package frc.robot.subsystems.hang;
 
 import static frc.robot.subsystems.hang.HangConstants.kStoredPositionMeters;
+import static frc.robot.subsystems.hang.HangConstants.kSimPositionRampRateInchesPerSec;
 
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.util.Units;
 
 /** Hang IO for simulation; rate-limited setpoint following. */
 public class HangIOSim implements HangIO {
 
   private static final double kLoopPeriodSecs = 0.02;
-  private static final double kMaxMetersPerSec = 0.04064;
+  private static final double kMaxMetersPerSec = Units.inchesToMeters(kSimPositionRampRateInchesPerSec);
 
   private double targetPositionMeters = 0.0;
   private double currentPositionMeters = 0.0;

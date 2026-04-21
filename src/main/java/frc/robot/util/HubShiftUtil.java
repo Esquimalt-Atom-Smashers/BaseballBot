@@ -84,15 +84,22 @@ public class HubShiftUtil {
         shiftTimer.restart();
     }
 
-    private static boolean[] getSchedule(boolean override) {
-        boolean[] currentSchedule;
+    /**
+     * Selects the active vs inactive shift schedule seen by the current driver station alliance.
+     *
+     * @param flipFromDs when true, returns the opposite alliance's schedule
+     */
+    private static boolean[] scheduleForDsAlliance(boolean flipFromDs) {
         Alliance startAlliance = getFirstActiveAlliance();
         boolean activeFirst = startAlliance == DriverStation.getAlliance().orElse(Alliance.Blue);
-        if (override) {
+        if (flipFromDs) {
             activeFirst = !activeFirst;
         }
-        currentSchedule = activeFirst ? activeSchedule : inactiveSchedule;
-        return currentSchedule;
+        return activeFirst ? activeSchedule : inactiveSchedule;
+    }
+
+    private static boolean[] getSchedule(boolean override) {
+        return scheduleForDsAlliance(override);
     }
 
     private static boolean[] getSchedule() {
@@ -151,6 +158,20 @@ public class HubShiftUtil {
 
     public static ShiftInfo getOfficialShiftInfo() {
         return getShiftInfo(getSchedule(), shiftStartTimes, shiftEndTimes);
+    }
+
+    /**
+     * Returns shift timing and {@link ShiftInfo#active()} hub-scoring flag for the given alliance, using the same
+     * teleop time windows as {@link #getOfficialShiftInfo()} but selecting the active vs inactive band when the
+     * alliance differs from the current driver station alliance.
+     *
+     * @param redAlliance {@code true} for the red alliance hub schedule, {@code false} for blue
+     * @return shift index, elapsed/remaining times in the current window, and whether that alliance may score
+     */
+    public static ShiftInfo getOfficialShiftInfoForAlliance(boolean redAlliance) {
+        boolean dsIsRed = DriverStation.getAlliance().map(a -> a == Alliance.Red).orElse(false);
+        boolean flipFromDs = redAlliance != dsIsRed;
+        return getShiftInfo(scheduleForDsAlliance(flipFromDs), shiftStartTimes, shiftEndTimes);
     }
 
     public static ShiftInfo getShiftedShiftInfo(boolean override) {

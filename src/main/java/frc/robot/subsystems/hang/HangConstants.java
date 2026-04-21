@@ -9,7 +9,7 @@ public final class HangConstants {
   private HangConstants() {}
 
   /** CAN ID of the Hang motor (NEO 550 on SPARK MAX). */
-  public static final int kMotorId = 9;
+  public static final int kMotorId = 58;
 
   /** Idle behavior when output is zero (coast or brake). */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kBrake;
@@ -55,4 +55,7 @@ public final class HangConstants {
 
   /** Delta Meter per step. */
   public static final double kStepMeters = Units.inchesToMeters(0.2);
+
+  /** SIM-only position ramp rate used by {@link HangIOSim} (in/s). */
+  public static final double kSimPositionRampRateInchesPerSec = 6.931;
 }

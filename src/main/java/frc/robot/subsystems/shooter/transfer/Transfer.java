@@ -22,6 +22,7 @@ public class Transfer extends SubsystemBase {
 
   private final TransferIO transferIO;
   private final TransferIO.TransferIOInputs transferInputs = new TransferIO.TransferIOInputs();
+  private final String logRoot;
 
   private State state = State.IDLE;
   private boolean colourSensorEnabled = false;
@@ -30,19 +31,24 @@ public class Transfer extends SubsystemBase {
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
   public Transfer(TransferIO io) {
+    this(io, "");
+  } // End Transfer Constructor
+
+  public Transfer(TransferIO io, String logRoot) {
     transferIO = io;
+    this.logRoot = logRoot;
   } // End Transfer Constructor
 
   @Override
   public void periodic() {
     transferIO.updateInputs(transferInputs);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/Inputs/MotorConnected", transferInputs.motorConnected);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/Inputs/AppliedVolts", transferInputs.appliedVolts);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/Inputs/SupplyCurrentAmps", transferInputs.supplyCurrentAmps);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/Inputs/ColorSensorTripped", transferInputs.colorSensorTripped);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/TargetVolts", getTargetVoltage());
-    Logger.recordOutput("Subsystems/Shooter/Transfer/BallStaged", ballStaged);
-    Logger.recordOutput("Subsystems/Shooter/Transfer/State", state.name());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/MotorConnected", transferInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/AppliedVolts", transferInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/SupplyCurrentAmps", transferInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/Inputs/ColorSensorTripped", transferInputs.colorSensorTripped);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/BallStaged", ballStaged);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Transfer/State", state.name());
 
     if (DriverStation.isDisabled()) {
       transferIO.stop();
