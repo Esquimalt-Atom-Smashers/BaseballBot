@@ -18,6 +18,30 @@ public final class HoodConstants { // XXX: Add correct values
   /** Analog input ID of the Hood encoder. */
   public static final int kEncoderId = 1;
 
+  /**
+   * RoboRIO analog reference (V) used only for sanity checks on {@link HoodIOAxon}; position uses
+   * {@link #kAxonEncoderVoltsAtMinAngle} / {@link #kAxonEncoderVoltsAtMaxAngle}.
+   */
+  public static final double kAxonAnalogReferenceVolts = 5.0;
+
+  /** Analog voltage read when the hood is at {@link #kMinAngleRad}. */
+  public static final double kAxonEncoderVoltsAtMinAngle = 0.0;
+
+  /** Analog voltage read when the hood is at {@link #kMaxAngleRad}. */
+  public static final double kAxonEncoderVoltsAtMaxAngle = 5.0;
+
+  /**
+   * When true, {@link edu.wpi.first.wpilibj.Servo#setAngle} is reflected about mid-travel so increasing commanded
+   * hood elevation decreases PWM angle (use if horn or cable runs opposite).
+   */
+  public static final boolean kAxonServoInverted = false;
+
+  /**
+   * Added to the servo angle (deg) after invert. Default assumes servo command degrees match hood elevation
+   * degrees; tune if the horn is not 1:1 with launch elevation.
+   */
+  public static final double kAxonServoAngleOffsetDeg = 0.0;
+
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kBrake;
 
