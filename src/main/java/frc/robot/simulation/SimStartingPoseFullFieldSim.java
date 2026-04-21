@@ -367,6 +367,17 @@ public final class SimStartingPoseFullFieldSim {
 				.setString(stem);
 	} // End forceChooserSelection
 
+	/**
+	 * Re-publishes each starting-pose chooser selected value to its NT {@code selected} entry.
+	 *
+	 * <p>Used to force chooser-widget rebind on fresh dashboard startup or NT reconnect.
+	 */
+	public void republishSelectedChoices() {
+		for (int role = 0; role < NUM_ROLES; role++) {
+			forceChooserSelection(role, selectedStem(role));
+		}
+	} // End republishSelectedChoices
+
 	/** Permanent SmartDashboard key for {@code role} (e.g. {@code "SimStartingPose/Blue-3"}). */
 	private static String dashboardKeyForRole(int role) {
 		return "SimStartingPose/" + ROLE_DASHBOARD_NAME[role];

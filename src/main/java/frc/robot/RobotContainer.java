@@ -28,6 +28,8 @@ import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.*;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import static edu.wpi.first.units.Units.Meters;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -142,6 +144,8 @@ public class RobotContainer {
 
 	// Dashboard inputs
 	private final LoggedDashboardChooser<Command> autoChooser;
+	private boolean chooserRepublishPending = true;
+	private boolean ntConnectedLastTick = false;
 
 	// Drive Simulation
 	private SwerveDriveSimulation driveSimulation = null;
@@ -799,6 +803,49 @@ public class RobotContainer {
 	public Command getAutonomousCommand() {
 		return autoChooser.get();
 	} // End getAutonomousCommand
+
+	/**
+	 * Re-publishes chooser selected values once on NT connect (and again on reconnect) so dashboard chooser widgets
+	 * bind reliably without manual topic re-confirm.
+	 */
+	public void republishDashboardChoosersOnNtConnect() {
+		NetworkTableInstance ntInstance = NetworkTableInstance.getDefault();
+		boolean ntConnected = ntInstance.isConnected();
+		if (ntConnected && !ntConnectedLastTick) {
+			chooserRepublishPending = true;
+		}
+		ntConnectedLastTick = ntConnected;
+		if (!ntConnected || !chooserRepublishPending) {
+			return;
+		}
+
+		republishChooserSelectedEntry("Auto Choices");
+		if (simSpawnSim != null) {
+			simSpawnSim.republishSelectedChoices();
+		}
+		if (simExtraBehaviorSim != null) {
+			simExtraBehaviorSim.republishSelectedChoices();
+		}
+		chooserRepublishPending = false;
+	} // End republishDashboardChoosersOnNtConnect
+
+	/**
+	 * Writes chooser {@code selected} back to itself for one SmartDashboard chooser root.
+	 *
+	 * <p>If {@code selected} is blank, falls back to {@code active} when present.
+	 */
+	private static void republishChooserSelectedEntry(String chooserRootKey) {
+		NetworkTable chooserTable = NetworkTableInstance.getDefault()
+				.getTable("SmartDashboard")
+				.getSubTable(chooserRootKey);
+		String selected = chooserTable.getEntry("selected").getString("");
+		if (selected == null || selected.isEmpty()) {
+			selected = chooserTable.getEntry("active").getString("");
+		}
+		if (selected != null && !selected.isEmpty()) {
+			chooserTable.getEntry("selected").setString(selected);
+		}
+	} // End republishChooserSelectedEntry
 
 	/// -----------------------------------------------------------------------------------------------------------------
 	/// --------------------------------------------- Other Useful Methods ----------------------------------------------

@@ -106,6 +106,7 @@ public class Robot extends LoggedRobot {
 
     // Update field view with robot pose (real robot odometry; sim updates in simulationPeriodic)
     robotContainer.updateFieldPose();
+    // robotContainer.republishDashboardChoosersOnNtConnect(); // TODO: Uncomment if Elastic SendableChooser is not working
 
     HubShiftUtil.ShiftInfo shiftInfo = HubShiftUtil.getOfficialShiftInfo();
     Logger.recordOutput("Dashboard/ShiftTimeRemaining", shiftInfo.remainingTime());

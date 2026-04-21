@@ -1023,4 +1023,15 @@ public final class SimFullFieldExtraBehaviourSim {
 				.getEntry("selected")
 				.setString(behavior);
 	} // End forceBehaviorSelectionByIndex
+
+	/**
+	 * Re-publishes each extra behavior chooser selected value to its NT {@code selected} entry.
+	 *
+	 * <p>Used to force chooser-widget rebind on fresh dashboard startup or NT reconnect.
+	 */
+	public void republishSelectedChoices() {
+		for (int index = 0; index < EXTRA_ROLES.length; index++) {
+			forceBehaviorSelectionByIndex(index, selectedBehaviorForRole(EXTRA_ROLES[index]));
+		}
+	} // End republishSelectedChoices
 } // End SimFullFieldExtraBehaviourSim
