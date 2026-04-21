@@ -34,39 +34,38 @@ import frc.robot.util.HubShiftUtil;
 import frc.robot.util.LocalADStarAK;
 
 /**
- * SIM-only behavior chooser manager for full-field extra robots.
- *
- * <p>This class intentionally excludes Primary and Second-Sim because those are human-controlled robots.
+ * SIM-only behavior chooser manager for full-field extra robots. Primary and Second-Sim are excluded because they are
+ * human controlled.
  *
  * <p>Cycle behaviors {@value #OPTION_CYCLE_BUMP} and {@value #OPTION_CYCLE_TRENCH} share the same two-path PathPlanner
- * sim loop ({@code pathOne} then {@code pathTwo}) and hub scoring rules.
+ * sim loop (pathfind to each holonomic start, follow, optional hub scoring).
  */
 public final class SimFullFieldExtraBehaviourSim {
 
 	public static final String OPTION_DO_NOTHING = "Do Nothing";
 	public static final String OPTION_DEFENSE_BLOCK = "Defense (Block)";
 	public static final String OPTION_DEFENSE_AGGRESSIVE = "Defense (Aggressive)";
-	/** Bump loop: pathfind to authored path starts, follow spline samples, hub score when shift and fuel allow. */
+	/** Bump loop: alliance-wall leg then neutral-to-alliance leg plus hub scoring. */
 	public static final String OPTION_CYCLE_BUMP = "Cycle (Bump)";
-	/** Trench loop: {@code AllianceWallSweep} then {@code NeutralZoneSweep}; same two-path hub scoring as bump. */
+	/** Trench loop: {@code AllianceWallSweep} then {@code NeutralZoneSweep} plus hub scoring. */
 	public static final String OPTION_CYCLE_TRENCH = "Cycle (Trench)";
 
-	// Staggered replanning times to avoid collisions
+	// ===== Shared pathfinder schedule =====
 	/** Prime replan periods per role (different primes prevent collisions). */
 	private static final int[] kPrimeReplanTicks = {23, 19, 17, 13, 11};
-	/** Role-specific phase offsets for the shared per-robot replan schedule. */
+	/** Role-specific phase offsets for the shared replan schedule. */
 	private static final int[] kPrimePhaseTicks = {0, 3, 5, 7, 11};
 
-	// Defense Block Config
-	/** Proportional gain used to hold X on the trench-neutral block line. */
+	// ===== Defense Block tuning =====
+	/** Proportional gain to hold X on the trench-neutral block line. */
 	private static final double kDefenseBlockPathXP = 5.0;
-	/** Proportional gain used to match defender Y to the tracked robot Y. */
+	/** Proportional gain to match defender Y to the tracked robot Y. */
 	private static final double kDefenseBlockPathYP = 4.2;
 	/** Linear speed clamp for defense-block steering. */
 	private static final double kDefenseBlockPathMaxLinearMetersPerSec = 2.5;
 	/** Extra stand-off from trench neutral edge so defenders stay just outside the trench lane. */
 	private static final double kDefenseBlockNeutralSideOffsetMeters = 0.6;
-	/** If target moves this much, force immediate replan. */
+	/** If target moves more than this, force immediate replan. */
 	private static final double kDefenseBlockTargetReplanDistanceMeters = 0.25;
 	/** If robot strays this far from cached path start, force immediate replan. */
 	private static final double kDefenseBlockStartReplanDistanceMeters = 0.35;
@@ -76,10 +75,10 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final PathConstraints kDefenseBlockPathConstraints =
 			new PathConstraints(5.0, 3.0, 2.5 * Math.PI, 3.0 * Math.PI);
 
-	// Defense Aggressive Config
-	/** Proportional gain used for aggressive chase/backoff X control. */
+	// ===== Defense Aggressive tuning =====
+	/** Proportional gain for aggressive chase/backoff X control. */
 	private static final double kDefenseAggressivePathXP = 10.0;
-	/** Proportional gain used for aggressive chase/backoff Y control. */
+	/** Proportional gain for aggressive chase/backoff Y control. */
 	private static final double kDefenseAggressivePathYP = 10.0;
 	/** Linear speed clamp for aggressive chase/backoff steering. */
 	private static final double kDefenseAggressivePathMaxLinearMetersPerSec = 3.5;
@@ -92,16 +91,16 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final double kDefenseAggressiveBackoffDistanceMeters = 2.0;
 	/** Delay after ram contact before switching to backoff (1.0s @ 20ms loop). */
 	private static final int kDefenseAggressiveBackoffDelayTicks = 53;
-	/** If backoff cannot complete within this time, abort and charge again (5.0s @ 20ms loop). */
+	/** Backoff abort timeout so a stuck backoff resumes chase (5.0s @ 20ms loop). */
 	private static final int kDefenseAggressiveBackoffTimeoutTicks = 250;
-	/** If separation exceeds this after contact, cancel countdown and resume chase. */
+	/** Separation after contact latch that cancels countdown and resumes chase. */
 	private static final double kDefenseAggressiveContactReleaseDistanceMeters = 2.2;
 	/** Position tolerance to finish backoff and start next ram. */
 	private static final double kDefenseAggressiveBackoffArriveMeters = 0.2;
 	/** Fallback backoff heading when target and robot overlap. */
 	private static final double kDefenseAggressiveFallbackBackoffXSign = -1.0;
 
-	// Two-path cycle: authored PathPlanner legs plus navgrid to each holonomic start.
+	// ===== Two-path cycle tuning =====
 	/** AD star constraints for reaching holonomic path starts. */
 	private static final PathConstraints kTwoPathCyclePathConstraints =
 			new PathConstraints(5.0, 5.0, 2.5 * Math.PI, 3.0 * Math.PI);
@@ -117,56 +116,47 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final double kTwoPathCycleFollowMaxLinearMetersPerSec = 3.0;
 	/** Omega clamp during spline follow (rad/s). */
 	private static final double kTwoPathCycleFollowMaxOmegaRadPerSec = 5;
-	/**
-	 * Minimum sim ticks between hub launch attempts during two-path cycle behaviors for full-field extras only.
-	 * With a 20 ms robot loop, average launch rate is about 50 divided by this value (per second).
-	 * Primary and second sim use {@link frc.robot.subsystems.shooter.ShooterSim} for shoot cadence instead.
-	 */
+	/** Minimum sim ticks between hub launch attempts (20 ms loop, so ~50/value launches per second). */
 	private static final int kTwoPathCycleScoreLaunchIntervalTicks = 5;
-	/** Max |heading error| (rad) before a launch is allowed. */
+	/** Max |heading error| (rad) before a hub launch is allowed. */
 	private static final double kTwoPathCycleScoreFacingToleranceRad = 0.14;
-	/**
-	 * Sim ticks without reaching holonomic path start before re-picking which pathfind leg to run from the nearer
-	 * holonomic start (2.0 s when {@link #updateExtraRobotBehaviors} runs once per 20 ms robot period).
-	 */
+	/** Sim ticks without reaching holonomic start before re-picking the closer-start leg (2.0 s @ 20 ms loop). */
 	private static final int kTwoPathCyclePathfindStartTimeoutTicks = 100;
 
-	/** PathPlanner deploy file stem for bump cycle path one (blue alliance frame). */
-	private static final String BUMP_CYCLE_PATH_ONE_DEPLOY_STEM = "Bump-AllianceToNeutral-Left";
-	/** PathPlanner deploy file stem for bump cycle path two (blue alliance frame). */
-	private static final String BUMP_CYCLE_PATH_TWO_DEPLOY_STEM = "Bump-NeutralToAlliance-Right";
+	// ===== Cycle deploy path sets =====
+	/** Immutable deploy stems + lazily-loaded blue/red authoring for one two-path cycle. */
+	private static final class CyclePathSet {
+		final String telemetryName;
+		final String pathOneStem;
+		final String pathTwoStem;
+		PathPlannerPath pathOneBlue;
+		PathPlannerPath pathTwoBlue;
+		PathPlannerPath pathOneRed;
+		PathPlannerPath pathTwoRed;
+		boolean loadAttempted;
+		String loadError;
 
-	/** Loaded blue-frame first bump leg; null if load failed. */
-	private static PathPlannerPath bumpPathOneBlueAuthoring;
-	/** Loaded blue-frame second bump leg; null if load failed. */
-	private static PathPlannerPath bumpPathTwoBlueAuthoring;
-	/** Red alliance copy of {@link #bumpPathOneBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath bumpPathOneRedAuthoring;
-	/** Red alliance copy of {@link #bumpPathTwoBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath bumpPathTwoRedAuthoring;
-	/** True after first attempt to read bump paths from deploy. */
-	private static boolean bumpPathsLoadAttempted;
-	/** Non-null when bump path load threw; used for sim log only. */
-	private static String bumpPathsLoadError;
+		CyclePathSet(String telemetryName, String pathOneStem, String pathTwoStem) {
+			this.telemetryName = telemetryName;
+			this.pathOneStem = pathOneStem;
+			this.pathTwoStem = pathTwoStem;
+		} // End CyclePathSet Constructor
 
-	/** PathPlanner deploy file stem for trench cycle path one (blue alliance frame). */
-	private static final String TRENCH_CYCLE_PATH_ONE_DEPLOY_STEM = "AllianceWallSweep";
-	/** PathPlanner deploy file stem for trench cycle path two (blue alliance frame). */
-	private static final String TRENCH_CYCLE_PATH_TWO_DEPLOY_STEM = "NeutralZoneSweep";
+		PathPlannerPath pathOne(boolean red) {
+			return red ? pathOneRed : pathOneBlue;
+		} // End pathOne
 
-	/** Loaded blue-frame first trench leg; null if load failed. */
-	private static PathPlannerPath trenchPathOneBlueAuthoring;
-	/** Loaded blue-frame second trench leg; null if load failed. */
-	private static PathPlannerPath trenchPathTwoBlueAuthoring;
-	/** Red alliance copy of {@link #trenchPathOneBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath trenchPathOneRedAuthoring;
-	/** Red alliance copy of {@link #trenchPathTwoBlueAuthoring}; null if load failed. */
-	private static PathPlannerPath trenchPathTwoRedAuthoring;
-	/** True after first attempt to read trench paths from deploy. */
-	private static boolean trenchPathsLoadAttempted;
-	/** Non-null when trench path load threw; used for sim log only. */
-	private static String trenchPathsLoadError;
+		PathPlannerPath pathTwo(boolean red) {
+			return red ? pathTwoRed : pathTwoBlue;
+		} // End pathTwo
+	} // End CyclePathSet
 
+	private static final CyclePathSet BUMP_CYCLE_PATHS = new CyclePathSet(
+			"BumpCycle", "Bump-AllianceToNeutral-Left", "Bump-NeutralToAlliance-Right");
+	private static final CyclePathSet TRENCH_CYCLE_PATHS = new CyclePathSet(
+			"TrenchCycle", "AllianceWallSweep", "NeutralZoneSweep");
+
+	// ===== Role layout =====
 	private static final int[] EXTRA_ROLES = {
 			SimStartingPoseFullFieldSim.ROLE_BLUE_2,
 			SimStartingPoseFullFieldSim.ROLE_BLUE_3,
@@ -184,11 +174,11 @@ public final class SimFullFieldExtraBehaviourSim {
 	};
 
 	private static final String[] EXTRA_ROLE_DEFAULT_BEHAVIOR = {
-			OPTION_DO_NOTHING,    // Blue-2
-			OPTION_DEFENSE_BLOCK, // Blue-3
-			OPTION_DEFENSE_BLOCK, // Red-1
+			OPTION_DO_NOTHING,         // Blue-2
+			OPTION_DEFENSE_BLOCK,      // Blue-3
+			OPTION_DEFENSE_BLOCK,      // Red-1
 			OPTION_DEFENSE_AGGRESSIVE, // Red-2
-			OPTION_DO_NOTHING     // Red-3
+			OPTION_DO_NOTHING          // Red-3
 	};
 
 	private static final int[][] EXTRAS_ROLES_BY_LAYOUT = {
@@ -207,6 +197,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			}, // Layout 2: Second-Sim on Red
 	};
 
+	// ===== Per-role state =====
 	private final Map<Integer, LocalADStarAK> defensePathfinderByRole = new HashMap<>();
 	private final Map<Integer, PathPlannerPath> defensePathByRole = new HashMap<>();
 	private final Map<Integer, Pose2d> defenseLastGoalByRole = new HashMap<>();
@@ -244,6 +235,9 @@ public final class SimFullFieldExtraBehaviourSim {
 	/** {@link #behaviorTickCounter} when the current pathfind leg began (cleared on arrive, timeout, behavior change). */
 	private final Map<Integer, Integer> twoPathCyclePathfindLegStartTickByRole = new HashMap<>();
 
+	// ===== Public API =====
+
+	/** Publishes one behavior chooser per extra role on SmartDashboard. */
 	public void init() {
 		for (int index = 0; index < EXTRA_ROLES.length; index++) {
 			SendableChooser<String> behaviorChooser = new SendableChooser<>();
@@ -257,7 +251,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		}
 	} // End init
 
-	/** Returns selected behavior for the fixed extra role. */
+	/** Returns the selected behavior for {@code role}, falling back to its default when nothing is published yet. */
 	public String selectedBehaviorForRole(int role) {
 		int index = indexForRole(role);
 		if (index < 0) {
@@ -268,18 +262,12 @@ public final class SimFullFieldExtraBehaviourSim {
 				.getSubTable(dashboardKeyForExtraIndex(index))
 				.getEntry("selected")
 				.getString("");
-		if (ntValue.isEmpty()) {
-			return EXTRA_ROLE_DEFAULT_BEHAVIOR[index];
-		}
-		return ntValue;
+		return ntValue.isEmpty() ? EXTRA_ROLE_DEFAULT_BEHAVIOR[index] : ntValue;
 	} // End selectedBehaviorForRole
 
 	/** Resets extra behavior chooser selections when the shared sim reset button is pressed. */
 	public void pollResetToDefaults(boolean simMode) {
-		if (!simMode) {
-			return;
-		}
-		if (!SmartDashboard.getBoolean("SimStartingPose/ResetToDefaults", false)) {
+		if (!simMode || !SmartDashboard.getBoolean("SimStartingPose/ResetToDefaults", false)) {
 			return;
 		}
 		for (int index = 0; index < EXTRA_ROLES.length; index++) {
@@ -297,30 +285,25 @@ public final class SimFullFieldExtraBehaviourSim {
 		if (!extrasEnabled || extraRobotsByPool == null || consumer == null) {
 			return;
 		}
-		int layout = layoutKey(secondSimEnabled, secondSimRedAlliance);
-		int[] rolesForLayout = EXTRAS_ROLES_BY_LAYOUT[layout];
-		for (int poolIdx = 0; poolIdx < rolesForLayout.length; poolIdx++) {
-			if (poolIdx >= extraRobotsByPool.length) {
-				break;
-			}
+		int[] rolesForLayout = EXTRAS_ROLES_BY_LAYOUT[layoutKey(secondSimEnabled, secondSimRedAlliance)];
+		for (int poolIdx = 0; poolIdx < rolesForLayout.length && poolIdx < extraRobotsByPool.length; poolIdx++) {
 			SimFullFieldExtraRobot extraRobot = extraRobotsByPool[poolIdx];
-			if (extraRobot == null) {
-				continue;
+			if (extraRobot != null) {
+				consumer.accept(rolesForLayout[poolIdx], extraRobot);
 			}
-			consumer.accept(rolesForLayout[poolIdx], extraRobot);
 		}
 	} // End forEachActiveExtra
 
 	/**
-	 * Updates extra robot behaviors.
+	 * Updates all extra robot behaviors for one sim tick.
 	 *
 	 * <p>Red defenders track Primary. Blue defenders track Second-Sim when it is on red, otherwise Red-2.
 	 *
-	 * @param fuelSim registered fuel simulation instance, or null when fuel sim is off
-	 * @param fuelSimEnabled when false, two-path cycle hub scoring treats carried fuel count as zero
+	 * <p>When {@code teleopEnabled} is false, active extras stop and all extra motion caches clear so the next enable
+	 * cold-starts pathfind instead of resuming a follow leg.
 	 *
-	 * <p>When {@code teleopEnabled} is false, active extras stop and all extra motion caches (including two-path cycle
-	 * phase) are cleared so re-enable cold-starts pathfind instead of resuming a follow leg.
+	 * @param fuelSim registered fuel simulation instance, or null when fuel sim is off
+	 * @param fuelSimEnabled when false, cycle hub scoring treats carried fuel count as zero
 	 */
 	public void updateExtraRobotBehaviors(
 			SimFullFieldExtraRobot[] extraRobotsByPool,
@@ -334,10 +317,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			boolean fuelSimEnabled) {
 		Map<Integer, SimFullFieldExtraRobot> activeExtraByRole = new HashMap<>();
 		forEachActiveExtra(
-				extraRobotsByPool,
-				extrasEnabled,
-				secondSimEnabled,
-				secondSimRedAlliance,
+				extraRobotsByPool, extrasEnabled, secondSimEnabled, secondSimRedAlliance,
 				(role, extraRobot) -> activeExtraByRole.put(role, extraRobot));
 
 		if (!teleopEnabled) {
@@ -363,31 +343,53 @@ public final class SimFullFieldExtraBehaviourSim {
 			String selectedBehavior = selectedBehaviorForRole(role);
 			Logger.recordOutput("SimFullFieldExtra/" + role + "/SelectedBehavior", selectedBehavior);
 			resetRoleStateOnBehaviorChange(role, selectedBehavior);
-
-			if (OPTION_DEFENSE_BLOCK.equals(selectedBehavior)) {
-				Pose2d targetPose = defenseBlockTargetPose(role, primaryPose, secondSimPose, red2Pose, secondSimEnabled, secondSimRedAlliance);
-				if (targetPose == null) {
-					extraRobot.drive.stop();
-					continue;
-				}
-				runDefenseBlockPathfind(role, extraRobot, roleIsRedAlliance(role), targetPose);
-			} else if (OPTION_DEFENSE_AGGRESSIVE.equals(selectedBehavior)) {
-				Pose2d targetPose = defenseBlockTargetPose(role, primaryPose, secondSimPose, red2Pose, secondSimEnabled, secondSimRedAlliance);
-				if (targetPose == null) {
-					extraRobot.drive.stop();
-					continue;
-				}
-				runDefenseAggressivePathfind(role, extraRobot, roleIsRedAlliance(role), targetPose);
-			} else if (OPTION_CYCLE_BUMP.equals(selectedBehavior)) {
-				runBumpCycleSim(role, extraRobot, fuelSim, fuelSimEnabled);
-			} else if (OPTION_CYCLE_TRENCH.equals(selectedBehavior)) {
-				runTrenchCycleSim(role, extraRobot, fuelSim, fuelSimEnabled);
-			} else {
-				// Includes explicit Do Nothing plus any future, unimplemented options.
-				extraRobot.drive.stop();
-			}
+			dispatchBehavior(
+					role, extraRobot, selectedBehavior,
+					primaryPose, secondSimPose, red2Pose,
+					secondSimEnabled, secondSimRedAlliance,
+					fuelSim, fuelSimEnabled);
 		}
 	} // End updateExtraRobotBehaviors
+
+	// ===== Dispatch =====
+
+	/** Routes one role/tick to the correct behavior runner; stops drive for unknown or {@value #OPTION_DO_NOTHING}. */
+	private void dispatchBehavior(
+			int role,
+			SimFullFieldExtraRobot extraRobot,
+			String selectedBehavior,
+			Pose2d primaryPose,
+			Pose2d secondSimPose,
+			Pose2d red2Pose,
+			boolean secondSimEnabled,
+			boolean secondSimRedAlliance,
+			FuelSim fuelSim,
+			boolean fuelSimEnabled) {
+		if (OPTION_DEFENSE_BLOCK.equals(selectedBehavior) || OPTION_DEFENSE_AGGRESSIVE.equals(selectedBehavior)) {
+			Pose2d targetPose = defenseTrackedRobotPose(
+					role, primaryPose, secondSimPose, red2Pose, secondSimEnabled, secondSimRedAlliance);
+			if (targetPose == null) {
+				extraRobot.drive.stop();
+				return;
+			}
+			boolean red = roleIsRedAlliance(role);
+			if (OPTION_DEFENSE_BLOCK.equals(selectedBehavior)) {
+				runDefenseBlockPathfind(role, extraRobot, red, targetPose);
+			} else {
+				runDefenseAggressivePathfind(role, extraRobot, red, targetPose);
+			}
+			return;
+		}
+		if (OPTION_CYCLE_BUMP.equals(selectedBehavior)) {
+			runCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, BUMP_CYCLE_PATHS);
+			return;
+		}
+		if (OPTION_CYCLE_TRENCH.equals(selectedBehavior)) {
+			runCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, TRENCH_CYCLE_PATHS);
+			return;
+		}
+		extraRobot.drive.stop();
+	} // End dispatchBehavior
 
 	/** 0 = no Second-Sim, 1 = Second-Sim on Blue, 2 = Second-Sim on Red. */
 	private static int layoutKey(boolean secondSimEnabled, boolean secondSimRedAlliance) {
@@ -397,8 +399,8 @@ public final class SimFullFieldExtraBehaviourSim {
 		return secondSimRedAlliance ? 2 : 1;
 	} // End layoutKey
 
-	/** Returns the tracked target pose for defense block. */
-	private static Pose2d defenseBlockTargetPose(
+	/** Returns the tracked target pose for defense (red tracks primary; blue tracks Second-Sim on red, else Red-2). */
+	private static Pose2d defenseTrackedRobotPose(
 			int role,
 			Pose2d primaryPose,
 			Pose2d secondSimPose,
@@ -412,7 +414,9 @@ public final class SimFullFieldExtraBehaviourSim {
 			return secondSimPose;
 		}
 		return red2Pose;
-	} // End defenseBlockTargetPose
+	} // End defenseTrackedRobotPose
+
+	// ===== Defense Block =====
 
 	/** Runs defense block using navgrid pathfinding with prime-tick replan staggering. */
 	private void runDefenseBlockPathfind(
@@ -426,196 +430,83 @@ public final class SimFullFieldExtraBehaviourSim {
 				trackedRobotPose.getY(),
 				selfPose.getRotation());
 		PathPlannerPath cachedPath = replanAndGetPath(
-				role,
-				selfPose,
-				goalPose,
-				kDefenseBlockPathConstraints,
-				kPrimeReplanTicks,
-				kPrimePhaseTicks,
-				defensePathfinderByRole,
-				defensePathByRole,
-				defenseLastGoalByRole);
-		Pose2d driveTargetPose = goalPose;
-		if (cachedPath != null) {
-			driveTargetPose = choosePathTargetPose(cachedPath, selfPose, goalPose);
-		}
+				role, selfPose, goalPose, kDefenseBlockPathConstraints,
+				defensePathfinderByRole, defensePathByRole, defenseLastGoalByRole);
+		Pose2d driveTargetPose = cachedPath != null ? choosePathTargetPose(cachedPath, selfPose, goalPose) : goalPose;
 		driveTowardPoseProportional(
-				extraRobot,
-				selfPose,
-				driveTargetPose,
-				kDefenseBlockPathXP,
-				kDefenseBlockPathYP,
-				kDefenseBlockPathMaxLinearMetersPerSec);
+				extraRobot, selfPose, driveTargetPose,
+				kDefenseBlockPathXP, kDefenseBlockPathYP, kDefenseBlockPathMaxLinearMetersPerSec);
 	} // End runDefenseBlockPathfind
 
-	/** Runs aggressive defense by looping between ram and 3m backoff. */
+	// ===== Defense Aggressive =====
+
+	/** Runs aggressive defense by looping between ram and timed backoff. */
 	private void runDefenseAggressivePathfind(
 			int role,
 			SimFullFieldExtraRobot extraRobot,
 			boolean defenderIsRedAlliance,
 			Pose2d trackedRobotPose) {
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-		boolean backingOff = aggressiveBackingOffByRole.getOrDefault(role, false);
-		Pose2d goalPose;
-
-		if (!backingOff) {
-			goalPose = trackedRobotPose;
-			double distanceToTarget = selfPose.getTranslation().getDistance(trackedRobotPose.getTranslation());
-			int contactTick = aggressiveRamContactTickByRole.getOrDefault(role, -1);
-
-			// Latch contact once, then run a pure timer-based delay before backoff.
-			if (contactTick < 0 && distanceToTarget <= kDefenseAggressiveRamSwitchDistanceMeters) {
-				contactTick = behaviorTickCounter;
-				aggressiveRamContactTickByRole.put(role, contactTick);
-			}
-
-			// If target separation grows too much, cancel latch and re-acquire contact.
-			if (contactTick >= 0 && distanceToTarget > kDefenseAggressiveContactReleaseDistanceMeters) {
-				aggressiveRamContactTickByRole.remove(role);
-				contactTick = -1;
-			}
-
-			// Countdown continues even if distance wiggles around while pushing.
-			if (contactTick >= 0 && behaviorTickCounter - contactTick >= kDefenseAggressiveBackoffDelayTicks) {
-				Pose2d backoffGoal = computeAggressiveBackoffGoal(selfPose, trackedRobotPose, defenderIsRedAlliance);
-				aggressiveBackoffGoalByRole.put(role, backoffGoal);
-				aggressiveBackingOffByRole.put(role, true);
-				aggressiveBackoffStartTickByRole.put(role, behaviorTickCounter);
-				aggressiveRamContactTickByRole.remove(role);
-				backingOff = true;
-				goalPose = backoffGoal;
-			}
-		} else {
-			goalPose = aggressiveBackoffGoalByRole.getOrDefault(
-					role,
-					computeAggressiveBackoffGoal(selfPose, trackedRobotPose, defenderIsRedAlliance));
-			double distanceToBackoff = selfPose.getTranslation().getDistance(goalPose.getTranslation());
-			int backoffStartTick = aggressiveBackoffStartTickByRole.getOrDefault(role, behaviorTickCounter);
-			boolean backoffTimedOut = behaviorTickCounter - backoffStartTick >= kDefenseAggressiveBackoffTimeoutTicks;
-			boolean backoffArrived = distanceToBackoff <= kDefenseAggressiveBackoffArriveMeters;
-			// Arrive = finish backoff cleanly; timeout = abort stale backoff. Both resume chase.
-			if (backoffArrived || backoffTimedOut) {
-				aggressiveBackingOffByRole.put(role, false);
-				aggressiveBackoffGoalByRole.remove(role);
-				aggressiveBackoffStartTickByRole.remove(role);
-				aggressiveRamContactTickByRole.remove(role);
-				goalPose = trackedRobotPose;
-			}
-		}
+		Pose2d goalPose = aggressiveBackingOffByRole.getOrDefault(role, false)
+				? resolveAggressiveBackoffGoal(role, selfPose, trackedRobotPose, defenderIsRedAlliance)
+				: resolveAggressiveChaseGoal(role, selfPose, trackedRobotPose, defenderIsRedAlliance);
 
 		PathPlannerPath path = replanAndGetPath(
-				role,
-				selfPose,
-				goalPose,
-				kDefenseAggressivePathConstraints,
-				kPrimeReplanTicks,
-				kPrimePhaseTicks,
-				aggressivePathfinderByRole,
-				aggressivePathByRole,
-				aggressiveLastGoalByRole);
-
-		Pose2d driveTargetPose = goalPose;
-		if (path != null) {
-			driveTargetPose = choosePathTargetPose(path, selfPose, goalPose);
-		}
+				role, selfPose, goalPose, kDefenseAggressivePathConstraints,
+				aggressivePathfinderByRole, aggressivePathByRole, aggressiveLastGoalByRole);
+		Pose2d driveTargetPose = path != null ? choosePathTargetPose(path, selfPose, goalPose) : goalPose;
 		driveTowardPoseProportional(
-				extraRobot,
-				selfPose,
-				driveTargetPose,
-				kDefenseAggressivePathXP,
-				kDefenseAggressivePathYP,
-				kDefenseAggressivePathMaxLinearMetersPerSec);
+				extraRobot, selfPose, driveTargetPose,
+				kDefenseAggressivePathXP, kDefenseAggressivePathYP, kDefenseAggressivePathMaxLinearMetersPerSec);
 	} // End runDefenseAggressivePathfind
 
-	/** Role-specific prime-tick schedule to spread replans across simulation ticks. */
-	private boolean shouldReplanForRole(int role, int[] replanTicks, int[] phaseTicks) {
-		int idx = indexForRole(role);
-		if (idx < 0 || idx >= replanTicks.length || idx >= phaseTicks.length) {
-			return true;
+	/** Chase branch: latches contact on close approach, switches to backoff after the delay, returns current chase goal. */
+	private Pose2d resolveAggressiveChaseGoal(
+			int role, Pose2d selfPose, Pose2d trackedRobotPose, boolean defenderIsRedAlliance) {
+		double distanceToTarget = selfPose.getTranslation().getDistance(trackedRobotPose.getTranslation());
+		int contactTick = aggressiveRamContactTickByRole.getOrDefault(role, -1);
+
+		if (contactTick < 0 && distanceToTarget <= kDefenseAggressiveRamSwitchDistanceMeters) {
+			contactTick = behaviorTickCounter;
+			aggressiveRamContactTickByRole.put(role, contactTick);
 		}
-		int period = replanTicks[idx];
-		int phase = phaseTicks[idx] % period;
-		return behaviorTickCounter % period == phase;
-	} // End shouldReplanForRole
-
-	/** Replans path when schedule/goal/start thresholds require it, then returns cached/new path. */
-	private PathPlannerPath replanAndGetPath(
-			int role,
-			Pose2d selfPose,
-			Pose2d goalPose,
-			PathConstraints constraints,
-			int[] replanTicks,
-			int[] phaseTicks,
-			Map<Integer, LocalADStarAK> pathfinderByRole,
-			Map<Integer, PathPlannerPath> pathByRole,
-			Map<Integer, Pose2d> lastGoalByRole) {
-		LocalADStarAK pathfinder = pathfinderByRole.computeIfAbsent(role, key -> new LocalADStarAK());
-		PathPlannerPath cachedPath = pathByRole.get(role);
-		Pose2d lastGoal = lastGoalByRole.get(role);
-		boolean scheduleReplan = shouldReplanForRole(role, replanTicks, phaseTicks);
-		boolean targetMoved = lastGoal == null
-				|| lastGoal.getTranslation().getDistance(goalPose.getTranslation()) > kDefenseBlockTargetReplanDistanceMeters;
-		List<PathPoint> cachedPoints = cachedPath != null ? cachedPath.getAllPathPoints() : null;
-		boolean robotMovedFromStart = cachedPath == null
-				|| cachedPoints == null
-				|| cachedPoints.isEmpty()
-				|| cachedPoints.get(0).position.getDistance(selfPose.getTranslation()) > kDefenseBlockStartReplanDistanceMeters;
-		if (scheduleReplan || targetMoved || robotMovedFromStart) {
-			pathfinder.setStartPosition(selfPose.getTranslation());
-			pathfinder.setGoalPosition(goalPose.getTranslation());
-			PathPlannerPath newPath = pathfinder.getCurrentPath(
-					constraints,
-					new GoalEndState(0.0, Rotation2d.fromRadians(0.0)));
-			if (newPath != null) {
-				pathByRole.put(role, newPath);
-				lastGoalByRole.put(role, goalPose);
-				cachedPath = newPath;
-			}
+		if (contactTick >= 0 && distanceToTarget > kDefenseAggressiveContactReleaseDistanceMeters) {
+			aggressiveRamContactTickByRole.remove(role);
+			contactTick = -1;
 		}
-		return cachedPath;
-	} // End replanAndGetPath
-
-	/**
-	 * Clears pathfind, follow, and two-path-cycle caches for one extra role. Does not change {@link #lastBehaviorByRole}
-	 * or dashboard selection.
-	 */
-	private void clearTransientExtraMotionCaches(int role) {
-		defensePathByRole.remove(role);
-		defenseLastGoalByRole.remove(role);
-		aggressivePathByRole.remove(role);
-		aggressiveLastGoalByRole.remove(role);
-		aggressiveBackingOffByRole.remove(role);
-		aggressiveBackoffGoalByRole.remove(role);
-		aggressiveBackoffStartTickByRole.remove(role);
-		aggressiveRamContactTickByRole.remove(role);
-		twoPathCyclePhaseByRole.remove(role);
-		twoPathCycleFollowPointsByRole.remove(role);
-		twoPathCycleFollowIndexByRole.remove(role);
-		twoPathCyclePathfinderByRole.remove(role);
-		twoPathCyclePathByRole.remove(role);
-		twoPathCycleLastGoalByRole.remove(role);
-		twoPathCycleLastLaunchTickByRole.remove(role);
-		twoPathCyclePathfindLegStartTickByRole.remove(role);
-	} // End clearTransientExtraMotionCaches
-
-	/**
-	 * Updates {@link #lastBehaviorByRole} and clears motion caches for {@code role} when its selected behavior string
-	 * changes.
-	 */
-	private void resetRoleStateOnBehaviorChange(int role, String selectedBehavior) {
-		String previousBehavior = lastBehaviorByRole.get(role);
-		if (selectedBehavior.equals(previousBehavior)) {
-			return;
+		if (contactTick >= 0 && behaviorTickCounter - contactTick >= kDefenseAggressiveBackoffDelayTicks) {
+			Pose2d backoffGoal = computeAggressiveBackoffGoal(selfPose, trackedRobotPose, defenderIsRedAlliance);
+			aggressiveBackoffGoalByRole.put(role, backoffGoal);
+			aggressiveBackingOffByRole.put(role, true);
+			aggressiveBackoffStartTickByRole.put(role, behaviorTickCounter);
+			aggressiveRamContactTickByRole.remove(role);
+			return backoffGoal;
 		}
-		lastBehaviorByRole.put(role, selectedBehavior);
-		clearTransientExtraMotionCaches(role);
-	} // End resetRoleStateOnBehaviorChange
+		return trackedRobotPose;
+	} // End resolveAggressiveChaseGoal
 
-	/** Computes a 3m backoff point away from the tracked target. */
+	/** Backoff branch: returns cached backoff goal or flips back to chase when arrived or timed out. */
+	private Pose2d resolveAggressiveBackoffGoal(
+			int role, Pose2d selfPose, Pose2d trackedRobotPose, boolean defenderIsRedAlliance) {
+		Pose2d backoffGoal = aggressiveBackoffGoalByRole.getOrDefault(
+				role, computeAggressiveBackoffGoal(selfPose, trackedRobotPose, defenderIsRedAlliance));
+		double distanceToBackoff = selfPose.getTranslation().getDistance(backoffGoal.getTranslation());
+		int backoffStartTick = aggressiveBackoffStartTickByRole.getOrDefault(role, behaviorTickCounter);
+		boolean backoffTimedOut = behaviorTickCounter - backoffStartTick >= kDefenseAggressiveBackoffTimeoutTicks;
+		boolean backoffArrived = distanceToBackoff <= kDefenseAggressiveBackoffArriveMeters;
+		if (backoffArrived || backoffTimedOut) {
+			aggressiveBackingOffByRole.put(role, false);
+			aggressiveBackoffGoalByRole.remove(role);
+			aggressiveBackoffStartTickByRole.remove(role);
+			aggressiveRamContactTickByRole.remove(role);
+			return trackedRobotPose;
+		}
+		return backoffGoal;
+	} // End resolveAggressiveBackoffGoal
+
+	/** Computes a {@link #kDefenseAggressiveBackoffDistanceMeters} point directly away from the tracked target. */
 	private static Pose2d computeAggressiveBackoffGoal(
-			Pose2d selfPose,
-			Pose2d trackedRobotPose,
-			boolean defenderIsRedAlliance) {
+			Pose2d selfPose, Pose2d trackedRobotPose, boolean defenderIsRedAlliance) {
 		double deltaX = selfPose.getX() - trackedRobotPose.getX();
 		double deltaY = selfPose.getY() - trackedRobotPose.getY();
 		double distance = Math.hypot(deltaX, deltaY);
@@ -635,7 +526,52 @@ public final class SimFullFieldExtraBehaviourSim {
 		return new Pose2d(clampedX, clampedY, selfPose.getRotation());
 	} // End computeAggressiveBackoffGoal
 
-	/** Selects a nearby lookahead waypoint on the current path. */
+	// ===== Shared navgrid replan + lookahead =====
+
+	/** True when this tick is the role's turn on the prime-tick replan schedule. */
+	private boolean shouldReplanForRole(int role) {
+		int idx = indexForRole(role);
+		if (idx < 0 || idx >= kPrimeReplanTicks.length || idx >= kPrimePhaseTicks.length) {
+			return true;
+		}
+		int period = kPrimeReplanTicks[idx];
+		int phase = kPrimePhaseTicks[idx] % period;
+		return behaviorTickCounter % period == phase;
+	} // End shouldReplanForRole
+
+	/** Replans when schedule/goal/start thresholds require it, then returns cached/new path (null if never planned). */
+	private PathPlannerPath replanAndGetPath(
+			int role,
+			Pose2d selfPose,
+			Pose2d goalPose,
+			PathConstraints constraints,
+			Map<Integer, LocalADStarAK> pathfinderByRole,
+			Map<Integer, PathPlannerPath> pathByRole,
+			Map<Integer, Pose2d> lastGoalByRole) {
+		LocalADStarAK pathfinder = pathfinderByRole.computeIfAbsent(role, key -> new LocalADStarAK());
+		PathPlannerPath cachedPath = pathByRole.get(role);
+		Pose2d lastGoal = lastGoalByRole.get(role);
+		boolean targetMoved = lastGoal == null
+				|| lastGoal.getTranslation().getDistance(goalPose.getTranslation()) > kDefenseBlockTargetReplanDistanceMeters;
+		List<PathPoint> cachedPoints = cachedPath != null ? cachedPath.getAllPathPoints() : null;
+		boolean robotMovedFromStart = cachedPoints == null
+				|| cachedPoints.isEmpty()
+				|| cachedPoints.get(0).position.getDistance(selfPose.getTranslation()) > kDefenseBlockStartReplanDistanceMeters;
+		if (shouldReplanForRole(role) || targetMoved || robotMovedFromStart) {
+			pathfinder.setStartPosition(selfPose.getTranslation());
+			pathfinder.setGoalPosition(goalPose.getTranslation());
+			PathPlannerPath newPath = pathfinder.getCurrentPath(
+					constraints, new GoalEndState(0.0, Rotation2d.fromRadians(0.0)));
+			if (newPath != null) {
+				pathByRole.put(role, newPath);
+				lastGoalByRole.put(role, goalPose);
+				cachedPath = newPath;
+			}
+		}
+		return cachedPath;
+	} // End replanAndGetPath
+
+	/** Selects a short lookahead waypoint on the current path. */
 	private static Pose2d choosePathTargetPose(PathPlannerPath path, Pose2d selfPose, Pose2d fallbackGoalPose) {
 		List<PathPoint> points = path.getAllPathPoints();
 		if (points.isEmpty()) {
@@ -657,11 +593,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		return new Pose2d(points.get(targetIndex).position, fallbackGoalPose.getRotation());
 	} // End choosePathTargetPose
 
-	/**
-	 * Drives field-centrically toward a pose target using independent X/Y proportional gains and a shared linear clamp.
-	 * Zero rotation output; callers that want heading control should use
-	 * {@link #driveTwoPathCycleFieldCentric(SimFullFieldExtraRobot, Pose2d, Pose2d, double)} instead.
-	 */
+	/** Field-centric P drive to a pose with independent X/Y gains, shared linear clamp, and zero rotation output. */
 	private static void driveTowardPoseProportional(
 			SimFullFieldExtraRobot extraRobot,
 			Pose2d selfPose,
@@ -669,22 +601,21 @@ public final class SimFullFieldExtraBehaviourSim {
 			double kxP,
 			double kyP,
 			double maxLinearMetersPerSec) {
-		double xErrorMeters = targetPose.getX() - selfPose.getX();
-		double yErrorMeters = targetPose.getY() - selfPose.getY();
-		double vxMetersPerSec = MathUtil.clamp(xErrorMeters * kxP, -maxLinearMetersPerSec, maxLinearMetersPerSec);
-		double vyMetersPerSec = MathUtil.clamp(yErrorMeters * kyP, -maxLinearMetersPerSec, maxLinearMetersPerSec);
+		double vxMetersPerSec = MathUtil.clamp(
+				(targetPose.getX() - selfPose.getX()) * kxP, -maxLinearMetersPerSec, maxLinearMetersPerSec);
+		double vyMetersPerSec = MathUtil.clamp(
+				(targetPose.getY() - selfPose.getY()) * kyP, -maxLinearMetersPerSec, maxLinearMetersPerSec);
 		extraRobot.drive.driveFieldCentric(vxMetersPerSec, vyMetersPerSec, 0.0);
 	} // End driveTowardPoseProportional
 
-	/** Returns the neutral-zone-side X of the opposing alliance trench, including a small offset. */
+	// ===== Shared alliance / field helpers =====
+
+	/** Returns the neutral-zone-side X of the opposing alliance trench, including a small stand-off offset. */
 	private static double trenchNeutralSideXForOpposingAlliance(boolean defenderIsRedAlliance) {
 		double blueNeutralSideX = FieldConstants.TRENCH_BUMP_X_M
 				+ (FieldConstants.TRENCH_BUMP_LENGTH_M / 2.0)
 				+ kDefenseBlockNeutralSideOffsetMeters;
-		if (defenderIsRedAlliance) {
-			return blueNeutralSideX;
-		}
-		return FieldConstants.FIELD_LENGTH_M - blueNeutralSideX;
+		return defenderIsRedAlliance ? blueNeutralSideX : FieldConstants.FIELD_LENGTH_M - blueNeutralSideX;
 	} // End trenchNeutralSideXForOpposingAlliance
 
 	/** True when the fixed extra role belongs to red alliance. */
@@ -694,188 +625,89 @@ public final class SimFullFieldExtraBehaviourSim {
 				|| role == SimStartingPoseFullFieldSim.ROLE_RED_3;
 	} // End roleIsRedAlliance
 
-	/**
-	 * Drops pathfind/follow state and forces {@link ExtraSimTwoPathCyclePhase#SCORE_HUB}. Caller must only invoke when
-	 * alliance zone, hub shift, and carried fuel gate all passed in {@link #runTwoPathCycleSim}.
-	 */
-	private void enterTwoPathCycleScoreHubFromTravel(int role, SimFullFieldExtraRobot extraRobot) {
-		extraRobot.drive.stop();
-		twoPathCyclePathfindLegStartTickByRole.remove(role);
-		clearTwoPathCycleNav(role);
-		twoPathCycleFollowPointsByRole.remove(role);
-		twoPathCycleFollowIndexByRole.remove(role);
-		twoPathCyclePathfinderByRole.remove(role);
-		twoPathCycleLastLaunchTickByRole.remove(role);
-		twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.SCORE_HUB);
-	} // End enterTwoPathCycleScoreHubFromTravel
+	/** Returns carried fuel count for {@code extraRobot}, or 0 when fuel sim is off or the robot has no fuel index. */
+	private static int carriedFuelForExtra(SimFullFieldExtraRobot extraRobot, FuelSim fuelSim, boolean fuelSimEnabled) {
+		if (!fuelSimEnabled || fuelSim == null || extraRobot.fuelRobotIndex < 0) {
+			return 0;
+		}
+		return fuelSim.getCarriedFuelCount(extraRobot.fuelRobotIndex);
+	} // End carriedFuelForExtra
 
-	/**
-	 * Picks {@link ExtraSimTwoPathCyclePhase#PATHFIND_TO_PATHONE} or {@link ExtraSimTwoPathCyclePhase#PATHFIND_TO_PATHTWO}
-	 * from whichever path holonomic start is closer in translation (ties favor path one).
-	 */
-	private static ExtraSimTwoPathCyclePhase pathfindPhaseForCloserHolonomicStart(
-			Pose2d robotPose, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
-		Pose2d startOne = pathOne.getStartingHolonomicPose().orElse(new Pose2d());
-		Pose2d startTwo = pathTwo.getStartingHolonomicPose().orElse(new Pose2d());
-		double d1 = robotPose.getTranslation().getDistance(startOne.getTranslation());
-		double d2 = robotPose.getTranslation().getDistance(startTwo.getTranslation());
-		return d1 <= d2 ? ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHONE : ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHTWO;
-	} // End pathfindPhaseForCloserHolonomicStart
+	// ===== Cache reset =====
 
-	/**
-	 * Clears follow/nav state and sets pathfind phase from whichever holonomic path start is closer to the robot.
-	 */
-	private void twoPathCycleBeginPathfindFromCloserHolonomicStart(
-			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
-		twoPathCyclePathfindLegStartTickByRole.remove(role);
-		clearTwoPathCycleNav(role);
-		twoPathCycleFollowPointsByRole.remove(role);
-		twoPathCycleFollowIndexByRole.remove(role);
-		twoPathCyclePathfinderByRole.remove(role);
-		twoPathCycleLastLaunchTickByRole.remove(role);
-		Pose2d pose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-		twoPathCyclePhaseByRole.put(role, pathfindPhaseForCloserHolonomicStart(pose, pathOne, pathTwo));
-	} // End twoPathCycleBeginPathfindFromCloserHolonomicStart
+	/** Clears pathfind, follow, and two-path-cycle caches for one extra role; keeps dashboard selection. */
+	private void clearTransientExtraMotionCaches(int role) {
+		defensePathByRole.remove(role);
+		defenseLastGoalByRole.remove(role);
+		aggressivePathByRole.remove(role);
+		aggressiveLastGoalByRole.remove(role);
+		aggressiveBackingOffByRole.remove(role);
+		aggressiveBackoffGoalByRole.remove(role);
+		aggressiveBackoffStartTickByRole.remove(role);
+		aggressiveRamContactTickByRole.remove(role);
+		clearTwoPathCycleTravelState(role);
+		twoPathCyclePhaseByRole.remove(role);
+	} // End clearTransientExtraMotionCaches
 
-	/**
-	 * Leaves {@link ExtraSimTwoPathCyclePhase#SCORE_HUB} when alliance zone or hub shift gate fails; resumes pathfind
-	 * toward the nearer holonomic start.
-	 */
-	private void exitTwoPathCycleScoreHubToTravel(
-			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
-		extraRobot.drive.stop();
-		twoPathCycleBeginPathfindFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
-	} // End exitTwoPathCycleScoreHubToTravel
+	/** Updates {@link #lastBehaviorByRole} and clears motion caches when the selected behavior changes. */
+	private void resetRoleStateOnBehaviorChange(int role, String selectedBehavior) {
+		if (selectedBehavior.equals(lastBehaviorByRole.get(role))) {
+			return;
+		}
+		lastBehaviorByRole.put(role, selectedBehavior);
+		clearTransientExtraMotionCaches(role);
+	} // End resetRoleStateOnBehaviorChange
 
-	/**
-	 * Loads bump PathPlanner paths from deploy once; sets {@link #bumpPathsLoadError} on failure.
-	 */
-	private static void ensureBumpCyclePathsLoaded() {
-		if (bumpPathsLoadAttempted) {
+	// ===== Cycle entry =====
+
+	/** Loads {@code set}'s blue + red (flipped) authoring once; records load error instead of throwing. */
+	private static void ensureCyclePathsLoaded(CyclePathSet set) {
+		if (set.loadAttempted) {
 			return;
 		}
 		synchronized (SimFullFieldExtraBehaviourSim.class) {
-			if (bumpPathsLoadAttempted) {
+			if (set.loadAttempted) {
 				return;
 			}
-			bumpPathsLoadAttempted = true;
+			set.loadAttempted = true;
 			try {
-				bumpPathOneBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_CYCLE_PATH_ONE_DEPLOY_STEM);
-				bumpPathTwoBlueAuthoring = PathPlannerPath.fromPathFile(BUMP_CYCLE_PATH_TWO_DEPLOY_STEM);
-				bumpPathOneRedAuthoring = bumpPathOneBlueAuthoring.flipPath();
-				bumpPathTwoRedAuthoring = bumpPathTwoBlueAuthoring.flipPath();
+				set.pathOneBlue = PathPlannerPath.fromPathFile(set.pathOneStem);
+				set.pathTwoBlue = PathPlannerPath.fromPathFile(set.pathTwoStem);
+				set.pathOneRed = set.pathOneBlue.flipPath();
+				set.pathTwoRed = set.pathTwoBlue.flipPath();
 			} catch (Exception ex) {
-				bumpPathsLoadError = ex.getMessage();
-				DriverStation.reportError("SimFullFieldExtra bump paths: " + ex.getMessage(), false);
+				set.loadError = ex.getMessage();
+				DriverStation.reportError("SimFullFieldExtra " + set.telemetryName + " paths: " + ex.getMessage(), false);
 			}
 		}
-	} // End ensureBumpCyclePathsLoaded
+	} // End ensureCyclePathsLoaded
 
-	/**
-	 * @param redAlliance true for red alliance field frame
-	 * @return cached bump path one, or null if paths never loaded
-	 */
-	private static PathPlannerPath bumpDeployPathOneForAlliance(boolean redAlliance) {
-		return redAlliance ? bumpPathOneRedAuthoring : bumpPathOneBlueAuthoring;
-	} // End bumpDeployPathOneForAlliance
-
-	/**
-	 * @param redAlliance true for red alliance field frame
-	 * @return cached bump path two, or null if paths never loaded
-	 */
-	private static PathPlannerPath bumpDeployPathTwoForAlliance(boolean redAlliance) {
-		return redAlliance ? bumpPathTwoRedAuthoring : bumpPathTwoBlueAuthoring;
-	} // End bumpDeployPathTwoForAlliance
-
-	/**
-	 * Runs one tick of {@link #OPTION_CYCLE_BUMP} using the deployed bump paths as {@code pathOne} / {@code pathTwo}.
-	 */
-	private void runBumpCycleSim(
+	/** Runs one tick of a cycle behavior after resolving {@code set}'s alliance-correct paths. */
+	private void runCycleSim(
 			int role,
 			SimFullFieldExtraRobot extraRobot,
 			FuelSim fuelSim,
-			boolean fuelSimEnabled) {
-		ensureBumpCyclePathsLoaded();
+			boolean fuelSimEnabled,
+			CyclePathSet set) {
+		ensureCyclePathsLoaded(set);
 		boolean red = roleIsRedAlliance(role);
-		PathPlannerPath pathOne = bumpDeployPathOneForAlliance(red);
-		PathPlannerPath pathTwo = bumpDeployPathTwoForAlliance(red);
+		PathPlannerPath pathOne = set.pathOne(red);
+		PathPlannerPath pathTwo = set.pathTwo(red);
 		if (pathOne == null || pathTwo == null) {
-			if (bumpPathsLoadError != null) {
-				Logger.recordOutput("SimFullFieldExtra/" + role + "/BumpCycle/LoadError", bumpPathsLoadError);
+			if (set.loadError != null) {
+				Logger.recordOutput("SimFullFieldExtra/" + role + "/" + set.telemetryName + "/LoadError", set.loadError);
 			}
 			extraRobot.drive.stop();
 			return;
 		}
-		runTwoPathCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, pathOne, pathTwo, "BumpCycle");
-	} // End runBumpCycleSim
+		runTwoPathCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, pathOne, pathTwo, set.telemetryName);
+	} // End runCycleSim
+
+	// ===== Two-path cycle FSM =====
 
 	/**
-	 * Loads trench PathPlanner paths from deploy once; sets {@link #trenchPathsLoadError} on failure.
-	 */
-	private static void ensureTrenchCyclePathsLoaded() {
-		if (trenchPathsLoadAttempted) {
-			return;
-		}
-		synchronized (SimFullFieldExtraBehaviourSim.class) {
-			if (trenchPathsLoadAttempted) {
-				return;
-			}
-			trenchPathsLoadAttempted = true;
-			try {
-				trenchPathOneBlueAuthoring = PathPlannerPath.fromPathFile(TRENCH_CYCLE_PATH_ONE_DEPLOY_STEM);
-				trenchPathTwoBlueAuthoring = PathPlannerPath.fromPathFile(TRENCH_CYCLE_PATH_TWO_DEPLOY_STEM);
-				trenchPathOneRedAuthoring = trenchPathOneBlueAuthoring.flipPath();
-				trenchPathTwoRedAuthoring = trenchPathTwoBlueAuthoring.flipPath();
-			} catch (Exception ex) {
-				trenchPathsLoadError = ex.getMessage();
-				DriverStation.reportError("SimFullFieldExtra trench paths: " + ex.getMessage(), false);
-			}
-		}
-	} // End ensureTrenchCyclePathsLoaded
-
-	/**
-	 * @param redAlliance true for red alliance field frame
-	 * @return cached trench path one, or null if paths never loaded
-	 */
-	private static PathPlannerPath trenchDeployPathOneForAlliance(boolean redAlliance) {
-		return redAlliance ? trenchPathOneRedAuthoring : trenchPathOneBlueAuthoring;
-	} // End trenchDeployPathOneForAlliance
-
-	/**
-	 * @param redAlliance true for red alliance field frame
-	 * @return cached trench path two, or null if paths never loaded
-	 */
-	private static PathPlannerPath trenchDeployPathTwoForAlliance(boolean redAlliance) {
-		return redAlliance ? trenchPathTwoRedAuthoring : trenchPathTwoBlueAuthoring;
-	} // End trenchDeployPathTwoForAlliance
-
-	/**
-	 * Runs one tick of {@link #OPTION_CYCLE_TRENCH} using {@code AllianceWallSweep} and {@code NeutralZoneSweep} as
-	 * {@code pathOne} / {@code pathTwo}.
-	 */
-	private void runTrenchCycleSim(
-			int role,
-			SimFullFieldExtraRobot extraRobot,
-			FuelSim fuelSim,
-			boolean fuelSimEnabled) {
-		ensureTrenchCyclePathsLoaded();
-		boolean red = roleIsRedAlliance(role);
-		PathPlannerPath pathOne = trenchDeployPathOneForAlliance(red);
-		PathPlannerPath pathTwo = trenchDeployPathTwoForAlliance(red);
-		if (pathOne == null || pathTwo == null) {
-			if (trenchPathsLoadError != null) {
-				Logger.recordOutput("SimFullFieldExtra/" + role + "/TrenchCycle/LoadError", trenchPathsLoadError);
-			}
-			extraRobot.drive.stop();
-			return;
-		}
-		runTwoPathCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, pathOne, pathTwo, "TrenchCycle");
-	} // End runTrenchCycleSim
-
-	/**
-	 * Runs one tick of a two-leg cycle: pathfind to each holonomic path start, follow authored samples, then hub
-	 * scoring when allowed. Cold start, pathfind timeout, and resume-after-travel pick the nearer holonomic start
-	 * between {@code pathOne} and {@code pathTwo}.
+	 * Runs one tick of a two-leg cycle: pathfind to each holonomic start, follow authored samples, then hub scoring
+	 * when allowed. Cold start, pathfind timeout, and resume-after-travel all pick whichever holonomic start is closer.
 	 *
 	 * @param telemetryName logger subfolder under {@code SimFullFieldExtra/{role}/}
 	 */
@@ -888,26 +720,18 @@ public final class SimFullFieldExtraBehaviourSim {
 			PathPlannerPath pathTwo,
 			String telemetryName) {
 		boolean red = roleIsRedAlliance(role);
-		ExtraSimTwoPathCyclePhase phase = twoPathCyclePhaseByRole.get(role);
-		if (phase == null) {
-			Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-			phase = pathfindPhaseForCloserHolonomicStart(selfPose, pathOne, pathTwo);
-			twoPathCyclePhaseByRole.put(role, phase);
-		}
-		Pose2d poseForScoreHubGate = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
-		boolean inAllianceZoneForScoreHub =
-				AllianceUtil.isInAllianceZone(poseForScoreHubGate.getX(), red);
-		boolean theirHubShift = HubShiftUtil.getOfficialShiftInfoForAlliance(red).active();
-		int carriedFuelForScoreHubGate = 0;
-		if (fuelSimEnabled && fuelSim != null && extraRobot.fuelRobotIndex >= 0) {
-			carriedFuelForScoreHubGate = fuelSim.getCarriedFuelCount(extraRobot.fuelRobotIndex);
-		}
-		boolean hasCarriedFuelForScoreHubGate = carriedFuelForScoreHubGate > 0;
-		boolean scoreHubGate = inAllianceZoneForScoreHub && theirHubShift && hasCarriedFuelForScoreHubGate;
-		// Do not abort an in-progress authored spline follow; score hub is entered after follow completes or from pathfind.
-		boolean onSplineFollowLeg =
-				phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE
-						|| phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO;
+		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
+
+		ExtraSimTwoPathCyclePhase phase = twoPathCyclePhaseByRole.computeIfAbsent(
+				role, key -> pathfindPhaseForCloserHolonomicStart(selfPose, pathOne, pathTwo));
+
+		boolean scoreHubGate = AllianceUtil.isInAllianceZone(selfPose.getX(), red)
+				&& HubShiftUtil.getOfficialShiftInfoForAlliance(red).active()
+				&& carriedFuelForExtra(extraRobot, fuelSim, fuelSimEnabled) > 0;
+		boolean onSplineFollowLeg = phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE
+				|| phase == ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO;
+
+		// Score-hub gate flips in/out, except never aborting an in-progress spline follow.
 		if (scoreHubGate && phase != ExtraSimTwoPathCyclePhase.SCORE_HUB && !onSplineFollowLeg) {
 			enterTwoPathCycleScoreHubFromTravel(role, extraRobot);
 			phase = ExtraSimTwoPathCyclePhase.SCORE_HUB;
@@ -919,18 +743,8 @@ public final class SimFullFieldExtraBehaviourSim {
 
 		switch (phase) {
 			case PATHFIND_TO_PATHONE:
-				if (pathfindTowardHolonomicPathStart(role, extraRobot, pathOne)) {
-					twoPathCyclePathfindLegStartTickByRole.remove(role);
-					clearTwoPathCycleNav(role);
-					beginTwoPathCycleFollow(role, pathOne);
-					twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE);
-				} else {
-					twoPathCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
-					int legStart = twoPathCyclePathfindLegStartTickByRole.get(role);
-					if (behaviorTickCounter - legStart >= kTwoPathCyclePathfindStartTimeoutTicks) {
-						reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
-					}
-				}
+				runTwoPathCyclePathfindTick(
+						role, extraRobot, pathOne, pathOne, pathTwo, ExtraSimTwoPathCyclePhase.FOLLOW_PATHONE);
 				break;
 			case FOLLOW_PATHONE:
 				if (advanceTwoPathCycleFollow(extraRobot, role)) {
@@ -940,18 +754,8 @@ public final class SimFullFieldExtraBehaviourSim {
 				}
 				break;
 			case PATHFIND_TO_PATHTWO:
-				if (pathfindTowardHolonomicPathStart(role, extraRobot, pathTwo)) {
-					twoPathCyclePathfindLegStartTickByRole.remove(role);
-					clearTwoPathCycleNav(role);
-					beginTwoPathCycleFollow(role, pathTwo);
-					twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO);
-				} else {
-					twoPathCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
-					int legStart = twoPathCyclePathfindLegStartTickByRole.get(role);
-					if (behaviorTickCounter - legStart >= kTwoPathCyclePathfindStartTimeoutTicks) {
-						reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
-					}
-				}
+				runTwoPathCyclePathfindTick(
+						role, extraRobot, pathTwo, pathOne, pathTwo, ExtraSimTwoPathCyclePhase.FOLLOW_PATHTWO);
 				break;
 			case FOLLOW_PATHTWO:
 				if (advanceTwoPathCycleFollow(extraRobot, role)) {
@@ -973,8 +777,75 @@ public final class SimFullFieldExtraBehaviourSim {
 	} // End runTwoPathCycleSim
 
 	/**
-	 * After {@link #kTwoPathCyclePathfindStartTimeoutTicks} without reaching holonomic start, clears nav cache and sets
-	 * pathfind phase from whichever holonomic start is closer (same rule as cold start).
+	 * Drives toward {@code authoredPath}'s holonomic start; on arrive begins follow and advances to {@code nextPhase};
+	 * on pathfind timeout re-picks the closer-start leg.
+	 */
+	private void runTwoPathCyclePathfindTick(
+			int role,
+			SimFullFieldExtraRobot extraRobot,
+			PathPlannerPath authoredPath,
+			PathPlannerPath pathOne,
+			PathPlannerPath pathTwo,
+			ExtraSimTwoPathCyclePhase nextPhase) {
+		if (pathfindTowardHolonomicPathStart(role, extraRobot, authoredPath)) {
+			twoPathCyclePathfindLegStartTickByRole.remove(role);
+			clearTwoPathCycleNav(role);
+			beginTwoPathCycleFollow(role, authoredPath);
+			twoPathCyclePhaseByRole.put(role, nextPhase);
+			return;
+		}
+		twoPathCyclePathfindLegStartTickByRole.putIfAbsent(role, behaviorTickCounter);
+		int legStart = twoPathCyclePathfindLegStartTickByRole.get(role);
+		if (behaviorTickCounter - legStart >= kTwoPathCyclePathfindStartTimeoutTicks) {
+			reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
+		}
+	} // End runTwoPathCyclePathfindTick
+
+	/** Picks the pathfind phase whose holonomic start is closer in XY (ties favor path one). */
+	private static ExtraSimTwoPathCyclePhase pathfindPhaseForCloserHolonomicStart(
+			Pose2d robotPose, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		double d1 = robotPose.getTranslation().getDistance(
+				pathOne.getStartingHolonomicPose().orElse(new Pose2d()).getTranslation());
+		double d2 = robotPose.getTranslation().getDistance(
+				pathTwo.getStartingHolonomicPose().orElse(new Pose2d()).getTranslation());
+		return d1 <= d2 ? ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHONE : ExtraSimTwoPathCyclePhase.PATHFIND_TO_PATHTWO;
+	} // End pathfindPhaseForCloserHolonomicStart
+
+	/** Clears pathfind, follow, and launch-timer state for a two-path cycle role (leaves phase untouched). */
+	private void clearTwoPathCycleTravelState(int role) {
+		twoPathCyclePathfindLegStartTickByRole.remove(role);
+		clearTwoPathCycleNav(role);
+		twoPathCycleFollowPointsByRole.remove(role);
+		twoPathCycleFollowIndexByRole.remove(role);
+		twoPathCyclePathfinderByRole.remove(role);
+		twoPathCycleLastLaunchTickByRole.remove(role);
+	} // End clearTwoPathCycleTravelState
+
+	/** Drops travel state and enters {@link ExtraSimTwoPathCyclePhase#SCORE_HUB}. */
+	private void enterTwoPathCycleScoreHubFromTravel(int role, SimFullFieldExtraRobot extraRobot) {
+		extraRobot.drive.stop();
+		clearTwoPathCycleTravelState(role);
+		twoPathCyclePhaseByRole.put(role, ExtraSimTwoPathCyclePhase.SCORE_HUB);
+	} // End enterTwoPathCycleScoreHubFromTravel
+
+	/** Drops travel state and sets pathfind phase toward the closer holonomic start. */
+	private void twoPathCycleBeginPathfindFromCloserHolonomicStart(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		clearTwoPathCycleTravelState(role);
+		Pose2d pose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
+		twoPathCyclePhaseByRole.put(role, pathfindPhaseForCloserHolonomicStart(pose, pathOne, pathTwo));
+	} // End twoPathCycleBeginPathfindFromCloserHolonomicStart
+
+	/** Leaves {@link ExtraSimTwoPathCyclePhase#SCORE_HUB} and resumes pathfind toward the closer holonomic start. */
+	private void exitTwoPathCycleScoreHubToTravel(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
+		extraRobot.drive.stop();
+		twoPathCycleBeginPathfindFromCloserHolonomicStart(role, extraRobot, pathOne, pathTwo);
+	} // End exitTwoPathCycleScoreHubToTravel
+
+	/**
+	 * After pathfind timeout, clears nav cache and sets pathfind phase toward the closer holonomic start (same rule as
+	 * cold start).
 	 */
 	private void reevaluateTwoPathCyclePathfindPhaseFromCloserHolonomicStart(
 			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath pathOne, PathPlannerPath pathTwo) {
@@ -995,33 +866,19 @@ public final class SimFullFieldExtraBehaviourSim {
 	 *
 	 * @return true when the robot translation is within {@link #kTwoPathCyclePathStartArriveMeters} of the start
 	 */
-	private boolean pathfindTowardHolonomicPathStart(int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath authoredPath) {
+	private boolean pathfindTowardHolonomicPathStart(
+			int role, SimFullFieldExtraRobot extraRobot, PathPlannerPath authoredPath) {
 		Pose2d goalPose = authoredPath.getStartingHolonomicPose().orElse(new Pose2d());
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
 		PathPlannerPath navPath = replanAndGetPath(
-				role,
-				selfPose,
-				goalPose,
-				kTwoPathCyclePathConstraints,
-				kPrimeReplanTicks,
-				kPrimePhaseTicks,
-				twoPathCyclePathfinderByRole,
-				twoPathCyclePathByRole,
-				twoPathCycleLastGoalByRole);
-		Pose2d driveTargetPose = goalPose;
-		if (navPath != null) {
-			driveTargetPose = choosePathTargetPose(navPath, selfPose, goalPose);
-		}
+				role, selfPose, goalPose, kTwoPathCyclePathConstraints,
+				twoPathCyclePathfinderByRole, twoPathCyclePathByRole, twoPathCycleLastGoalByRole);
+		Pose2d driveTargetPose = navPath != null ? choosePathTargetPose(navPath, selfPose, goalPose) : goalPose;
 		driveTwoPathCycleFieldCentric(extraRobot, selfPose, driveTargetPose, goalPose.getRotation().getRadians());
 		return selfPose.getTranslation().getDistance(goalPose.getTranslation()) <= kTwoPathCyclePathStartArriveMeters;
 	} // End pathfindTowardHolonomicPathStart
 
-	/**
-	 * Copies authored path samples into follow state and resets the follow index to the first point.
-	 *
-	 * @param role role key for per-role follow storage
-	 * @param authoredPath PathPlanner path whose samples are followed in field frame
-	 */
+	/** Copies authored path samples into follow state and resets the follow index to the first point. */
 	private void beginTwoPathCycleFollow(int role, PathPlannerPath authoredPath) {
 		List<Translation2d> points = new ArrayList<>();
 		for (PathPoint pathPoint : authoredPath.getAllPathPoints()) {
@@ -1054,44 +911,33 @@ public final class SimFullFieldExtraBehaviourSim {
 		}
 		double headingRad = Math.atan2(target.getY() - selfPose.getY(), target.getX() - selfPose.getX());
 		driveTwoPathCycleFieldCentric(
-				extraRobot,
-				selfPose,
-				new Pose2d(target, Rotation2d.fromRadians(headingRad)),
-				headingRad);
+				extraRobot, selfPose, new Pose2d(target, Rotation2d.fromRadians(headingRad)), headingRad);
 		return false;
 	} // End advanceTwoPathCycleFollow
 
-	/**
-	 * Field-centric P drive toward {@code targetPose} while tracking {@code headingGoalRad}.
-	 */
+	/** Field-centric P drive toward {@code targetPose} while tracking {@code headingGoalRad}. */
 	private void driveTwoPathCycleFieldCentric(
 			SimFullFieldExtraRobot extraRobot,
 			Pose2d selfPose,
 			Pose2d targetPose,
 			double headingGoalRad) {
-		double xErrorMeters = targetPose.getX() - selfPose.getX();
-		double yErrorMeters = targetPose.getY() - selfPose.getY();
 		double vxMetersPerSec = MathUtil.clamp(
-				xErrorMeters * kTwoPathCycleFollowLinearP,
-				-kTwoPathCycleFollowMaxLinearMetersPerSec,
-				kTwoPathCycleFollowMaxLinearMetersPerSec);
+				(targetPose.getX() - selfPose.getX()) * kTwoPathCycleFollowLinearP,
+				-kTwoPathCycleFollowMaxLinearMetersPerSec, kTwoPathCycleFollowMaxLinearMetersPerSec);
 		double vyMetersPerSec = MathUtil.clamp(
-				yErrorMeters * kTwoPathCycleFollowLinearP,
-				-kTwoPathCycleFollowMaxLinearMetersPerSec,
-				kTwoPathCycleFollowMaxLinearMetersPerSec);
+				(targetPose.getY() - selfPose.getY()) * kTwoPathCycleFollowLinearP,
+				-kTwoPathCycleFollowMaxLinearMetersPerSec, kTwoPathCycleFollowMaxLinearMetersPerSec);
 		double headingErrorRad = MathUtil.angleModulus(headingGoalRad - selfPose.getRotation().getRadians());
 		double omegaRadPerSec = MathUtil.clamp(
 				headingErrorRad * kTwoPathCycleFollowOmegaP,
-				-kTwoPathCycleFollowMaxOmegaRadPerSec,
-				kTwoPathCycleFollowMaxOmegaRadPerSec);
+				-kTwoPathCycleFollowMaxOmegaRadPerSec, kTwoPathCycleFollowMaxOmegaRadPerSec);
 		extraRobot.drive.driveFieldCentric(vxMetersPerSec, vyMetersPerSec, omegaRadPerSec);
 	} // End driveTwoPathCycleFieldCentric
 
 	/**
 	 * Aims the whole robot like a fixed forward turret and launches one fuel when facing, timing, and fuel state allow.
-	 * Hood and exit speed follow {@link ShooterCalculator#iterativeMovingShotFromFunnelClearance} (same path as
-	 * {@link frc.robot.commands.ShooterCommands#setShooterTarget} with hood enabled), without {@link
-	 * frc.robot.subsystems.shooter.hood.HoodConstants} clamping.
+	 * Hood and exit speed follow {@link ShooterCalculator#iterativeMovingShotFromFunnelClearance} without
+	 * {@link frc.robot.subsystems.shooter.hood.HoodConstants} clamping.
 	 *
 	 * @param redAlliance selects red vs blue funnel-top hub target
 	 */
@@ -1101,11 +947,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			FuelSim fuelSim,
 			boolean fuelSimEnabled,
 			boolean redAlliance) {
-		if (!fuelSimEnabled || fuelSim == null || extraRobot.fuelRobotIndex < 0) {
-			extraRobot.drive.stop();
-			return;
-		}
-		if (fuelSim.getCarriedFuelCount(extraRobot.fuelRobotIndex) <= 0) {
+		if (carriedFuelForExtra(extraRobot, fuelSim, fuelSimEnabled) <= 0) {
 			extraRobot.drive.stop();
 			return;
 		}
@@ -1114,34 +956,17 @@ public final class SimFullFieldExtraBehaviourSim {
 		Translation3d target3d =
 				redAlliance ? FieldConstants.RED_FUNNEL_TOP_CENTER_3D : FieldConstants.BLUE_FUNNEL_TOP_CENTER_3D;
 
-		double phaseDelaySec = ShooterConstants.kPhaseDelaySec;
-		Pose2d estimatedPose =
-				new Pose2d(
-						pose.getTranslation()
-								.plus(
-										new Translation2d(
-												fieldSpeeds.vxMetersPerSecond * phaseDelaySec,
-												fieldSpeeds.vyMetersPerSecond * phaseDelaySec)),
-						pose.getRotation()
-								.plus(
-										Rotation2d.fromRadians(
-												fieldSpeeds.omegaRadiansPerSecond * phaseDelaySec)));
-
-		ShooterCalculator.ShotData shot =
-				ShooterCalculator.iterativeMovingShotFromFunnelClearance(
-						estimatedPose,
-						fieldSpeeds,
-						target3d,
-						ShooterConstants.kLookaheadIterations);
-
-		double turretYawRobotRad =
-				ShooterCalculator.calculateAzimuthAngle(estimatedPose, shot.getTarget(), 0.0).in(Radians);
+		Pose2d estimatedPose = estimateLookaheadPose(pose, fieldSpeeds, ShooterConstants.kPhaseDelaySec);
+		ShooterCalculator.ShotData shot = ShooterCalculator.iterativeMovingShotFromFunnelClearance(
+				estimatedPose, fieldSpeeds, target3d, ShooterConstants.kLookaheadIterations);
+		double turretYawRobotRad = ShooterCalculator
+				.calculateAzimuthAngle(estimatedPose, shot.getTarget(), 0.0)
+				.in(Radians);
 
 		Pose2d selfPose = extraRobot.driveSimulation.getSimulatedDriveTrainPose();
 		double headingGoalRad = selfPose.getRotation().getRadians() + turretYawRobotRad;
 		driveTwoPathCycleFieldCentric(
-				extraRobot,
-				selfPose,
+				extraRobot, selfPose,
 				new Pose2d(selfPose.getTranslation(), Rotation2d.fromRadians(headingGoalRad)),
 				headingGoalRad);
 
@@ -1154,15 +979,9 @@ public final class SimFullFieldExtraBehaviourSim {
 		}
 
 		double exitVelMps = shot.getExitVelocity().in(MetersPerSecond);
-		double flywheelSurfaceSpeedMps =
-				exitVelMps
-						/ ShooterConstants.kFlywheelSurfaceDivider
-						* ShooterConstants.kExitVelocityCompensationMultiplier;
-		double ballExitVelMps =
-				flywheelSurfaceSpeedMps
-						* ShooterConstants.kFlywheelSurfaceDivider
-						* ShooterConstants.kSimFlywheelToFuelExitVelocityEfficiency;
-
+		double ballExitVelMps = exitVelMps
+				* ShooterConstants.kExitVelocityCompensationMultiplier
+				* ShooterConstants.kSimFlywheelToFuelExitVelocityEfficiency;
 		double fuelSimElevationRad = Math.PI / 2.0 - shot.getHoodAngle().in(Radians);
 		fuelSim.launchFuel(
 				extraRobot.fuelRobotIndex,
@@ -1172,6 +991,17 @@ public final class SimFullFieldExtraBehaviourSim {
 				ShooterConstants.robotToTurret);
 		twoPathCycleLastLaunchTickByRole.put(role, behaviorTickCounter);
 	} // End runTwoPathCycleHubScoringTick
+
+	/** Projects {@code pose} forward by {@code phaseDelaySec} using current field-relative chassis speeds. */
+	private static Pose2d estimateLookaheadPose(Pose2d pose, ChassisSpeeds fieldSpeeds, double phaseDelaySec) {
+		return new Pose2d(
+				pose.getTranslation().plus(new Translation2d(
+						fieldSpeeds.vxMetersPerSecond * phaseDelaySec,
+						fieldSpeeds.vyMetersPerSecond * phaseDelaySec)),
+				pose.getRotation().plus(Rotation2d.fromRadians(fieldSpeeds.omegaRadiansPerSecond * phaseDelaySec)));
+	} // End estimateLookaheadPose
+
+	// ===== Dashboard / role index =====
 
 	private static int indexForRole(int role) {
 		for (int i = 0; i < EXTRA_ROLES.length; i++) {
