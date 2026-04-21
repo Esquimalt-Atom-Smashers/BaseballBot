@@ -15,6 +15,7 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
@@ -36,6 +37,8 @@ import frc.robot.util.Zones.Zone;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.littletonrobotics.junction.AutoLogOutput;
+
+import com.google.flatbuffers.Constants;
 
 /** Default drive command. */
 public class TeleopDrive extends Command {
@@ -215,6 +218,8 @@ public class TeleopDrive extends Command {
         //   drive.stopWithX();
         //   break;
         // }
+        // turns off rumble if it was on already
+        rumbleController(false);
 
         if (isRobotCentricSupplier.getAsBoolean()) {
           drive.runVelocity(new ChassisSpeeds(vx, vy, rot));
@@ -233,6 +238,7 @@ public class TeleopDrive extends Command {
         if (rotationController.atSetpoint()) {
           rotSpeedToStraight = 0;
         }
+        rumbleController(false);
         drive.driveFieldCentric(
             linearVelocity.getX(),
             yVel,
@@ -244,6 +250,7 @@ public class TeleopDrive extends Command {
         if (rotationController.atSetpoint()) {
           rotSpeedToDiagonal = 0;
         }
+        rumbleController(false);
         drive.driveFieldCentric(
             linearVelocity.getX(),
             linearVelocity.getY(),
@@ -260,15 +267,24 @@ public class TeleopDrive extends Command {
         double rotate = isFacingHubSupplier.getAsBoolean()
             ? DriveCommands.computeOmegaToFaceHub(drive, faceTargetController)
             : maxRotSpeedRadPerS * omega;
-
+        rumbleController(true);
         drive.driveFieldCentric(
             xVelocity,
             linearVelocity.getY(),
             rotate);
+
         break;
     }
   } // End execute
 
+  public void rumbleController(boolean isRumbling){
+    if (isRumbling){
+    controller.getHID().setRumble(RumbleType.kBothRumble,frc.robot.Constants.ControllerConstants.CONTROLLER_RUMBLE);
+    } else {
+    controller.getHID().setRumble(RumbleType.kBothRumble,0);
+    
+    }
+  }
   @Override
   public void end(boolean interrupted) {}
 
