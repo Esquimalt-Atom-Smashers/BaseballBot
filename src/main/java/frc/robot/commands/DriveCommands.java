@@ -131,7 +131,7 @@ public class DriveCommands {
   } // End timedDriveBackRobotCentric
 
   // ============================================================================
-  // Private Helper Methods
+  // Helper Methods
   // ============================================================================
 
   // ----------------------------------------------------------------------------
@@ -155,7 +155,7 @@ public class DriveCommands {
    *     radians/sec). Should be >= 0.
    * @return The scaled output value with turbo applied
    */
-  private static double scaleAxisWithTurbo(double inputValue, double turboAxis, double maxRange) {
+  public static double scaleAxisWithTurbo(double inputValue, double turboAxis, double maxRange) {
     // Linear interpolation from minTurbo (when turboAxis == 0) to 1.0 (when turboAxis == 1).
     double minTurbo = 1.0 / TURBO_MULTIPLE; // Minimum fraction of maxRange when turbo is not applied
     double turbo = turboAxis * (1.0 - minTurbo) + minTurbo;
@@ -171,7 +171,7 @@ public class DriveCommands {
    * @param y axis joystick input
    * @return linear velocity vector
    */
-  private static Translation2d getLinearVelocityFromJoysticks(double x, double y) {
+  public static Translation2d getLinearVelocityFromJoysticks(double x, double y) {
     // Apply deadband
     double linearMagnitude = MathUtil.applyDeadband(Math.hypot(x, y), XBOX_JOYSTICK_DEADBAND);
     Rotation2d linearDirection = new Rotation2d(Math.atan2(y, x));

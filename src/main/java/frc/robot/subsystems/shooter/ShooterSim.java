@@ -26,7 +26,7 @@ import frc.robot.subsystems.shooter.turret.Turret;
 public class ShooterSim {
 
   private static final int CAPACITY = 30;
-  private static final int kInitialFuelStored = 8;
+  public static final int kInitialFuelStored = 8;
   private static final double SHOOT_INTERVAL_SEC = 0.25;
 
   private final FuelSim fuelSim;

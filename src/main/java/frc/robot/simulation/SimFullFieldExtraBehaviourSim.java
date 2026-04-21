@@ -19,6 +19,7 @@ import com.pathplanner.lib.path.PathPoint;
 
 import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
@@ -26,11 +27,17 @@ import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import frc.robot.Constants;
 import frc.robot.FieldConstants;
+import frc.robot.commands.DriveCommands;
+import frc.robot.commands.ShooterCommands;
+import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.shooter.ShooterCalculator;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.util.AllianceUtil;
@@ -53,6 +60,8 @@ public final class SimFullFieldExtraBehaviourSim {
 	public static final String OPTION_CYCLE_BUMP = "Cycle (Bump)";
 	/** Trench loop: {@code AllianceWallSweep} then {@code NeutralZoneSweep} plus hub scoring. */
 	public static final String OPTION_CYCLE_TRENCH = "Cycle (Trench)";
+	/** Driver control using dedicated controller ports for selected extra roles. */
+	public static final String OPTION_HUMAN_CONTROL = "Human Control";
 
 	// ===== Shared pathfinder schedule =====
 	/** Prime replan periods per role (different primes prevent collisions). */
@@ -148,6 +157,13 @@ public final class SimFullFieldExtraBehaviourSim {
 	private static final Transform3d kKitbotShooterPos = new Transform3d(new Translation3d(0.3395, 0.0, 0.205), new Rotation3d());
 	/** Sentinel meaning "no launch yet"; chosen large-negative so {@code tickCounter - sentinel} clears any interval. */
 	private static final int kLastLaunchTickUnset = -1_000_000;
+
+	// ===== Human Control =====
+	private static final int kHumanControllerPortBlue2 = 1;
+	private static final int kHumanControllerPortBlue3 = 2;
+	private static final int kHumanControllerPortRed1 = 3;
+	private static final int kHumanControllerPortRed2 = 4;
+	private static final int kHumanControllerPortRed3 = 5;
 
 	// ===== Cycle deploy path sets =====
 	/** Immutable deploy stems + lazily-loaded blue/red authoring plus cached holonomic starts for one two-path cycle. */
@@ -276,6 +292,10 @@ public final class SimFullFieldExtraBehaviourSim {
 	private int behaviorTickCounter = 0;
 	private Pose2d latestPrimaryPose;
 	private Pose2d latestSecondSimPose;
+	private final Map<Integer, CommandXboxController> humanControllerByRole = new HashMap<>();
+	private final Map<Integer, Integer> humanControllerPortByRole = new HashMap<>();
+	private final Map<Integer, Boolean> humanPrevRightBumperByRole = new HashMap<>();
+	private final Map<Integer, ProfiledPIDController> humanFaceTargetControllerByRole = new HashMap<>();
 
 	/** Phases for {@link #runTwoPathCycleSim}: pathfind and follow each leg, then optional hub scoring. */
 	private enum ExtraSimTwoPathCyclePhase {
@@ -310,6 +330,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			behaviorChooser.addOption(OPTION_DEFENSE_AGGRESSIVE, OPTION_DEFENSE_AGGRESSIVE);
 			behaviorChooser.addOption(OPTION_CYCLE_BUMP, OPTION_CYCLE_BUMP);
 			behaviorChooser.addOption(OPTION_CYCLE_TRENCH, OPTION_CYCLE_TRENCH);
+			behaviorChooser.addOption(OPTION_HUMAN_CONTROL, OPTION_HUMAN_CONTROL);
 			SmartDashboard.putData(dashboardKeyForExtraIndex(index), behaviorChooser);
 		}
 	} // End init
@@ -457,6 +478,10 @@ public final class SimFullFieldExtraBehaviourSim {
 			runCycleSim(role, extraRobot, fuelSim, fuelSimEnabled, TRENCH_CYCLE_PATHS);
 			return;
 		}
+		if (OPTION_HUMAN_CONTROL.equals(selectedBehavior)) {
+			runHumanControlSim(role, extraRobot, fuelSim, fuelSimEnabled, secondSimEnabled);
+			return;
+		}
 		extraRobot.drive.stop();
 	} // End dispatchBehavior
 
@@ -484,6 +509,136 @@ public final class SimFullFieldExtraBehaviourSim {
 		}
 		return red2Pose;
 	} // End defenseTrackedRobotPose
+
+	/** Runs direct human control for selected extra roles using dedicated controller ports. */
+	private void runHumanControlSim(
+			int role,
+			SimFullFieldExtraRobot extraRobot,
+			FuelSim fuelSim,
+			boolean fuelSimEnabled,
+			boolean secondSimEnabled) {
+		CommandXboxController controller = humanControllerForRole(role, secondSimEnabled);
+		if (controller == null) {
+			extraRobot.drive.stop();
+			return;
+		}
+
+		// Get linear velocity
+		Translation2d linearVelocity =
+				DriveCommands.getLinearVelocityFromJoysticks(-controller.getLeftX(), -controller.getLeftY());
+				
+		// Square turbo input for quadratic response (always positive, so just square it)
+		double turboInput = controller.getRightTriggerAxis();
+		turboInput = turboInput * turboInput;
+
+		// Determine speed limits based on parameter
+		double maxLinearSpeed = extraRobot.drive.getMaxLinearSpeedMetersPerSec();
+		double maxAngularRate = extraRobot.drive.getMaxAngularSpeedRadPerSec();
+
+		// Apply turbo scaling to linear velocity components
+		double velocityX = DriveCommands.scaleAxisWithTurbo(linearVelocity.getY(), turboInput, maxLinearSpeed);  // Forward/backward joystick → field X
+		double velocityY = DriveCommands.scaleAxisWithTurbo(linearVelocity.getX(), turboInput, maxLinearSpeed);  // Left/right joystick → field Y
+
+		// Determine rotational rate: use face-target PID if enabled, otherwise use joystick
+		boolean faceAndShoot = controller.getHID().getAButton();
+		double rotationalRate;
+		if (faceAndShoot) {
+			autoSelectShootingTargetForExtra(extraRobot, roleIsRedAlliance(role));
+			// Calculate target angle and use PID controller to rotate toward it
+			rotationalRate = computeOmegaToFaceHubRear(extraRobot.drive, faceTargetControllerForRole(role));
+			runTwoPathCycleHubScoringTick(extraRobot, roleState(role), fuelSim, fuelSimEnabled);
+		} else {
+			// Apply rotation deadband
+			double omega = MathUtil.applyDeadband(-controller.getRightX(), Constants.ControllerConstants.CONTROLLER_DEADBAND);
+			
+			// Square rotation value for more precise control
+			omega = Math.copySign(omega * omega, omega);
+
+			// Apply turbo scaling to omega
+			rotationalRate = DriveCommands.scaleAxisWithTurbo(omega, turboInput, maxAngularRate);
+			
+			// Reset PID controller when not using face-target mode
+			faceTargetControllerForRole(role).reset(extraRobot.drive.getRotation().getRadians());
+		}
+		driveFieldRelativeForAlliance(extraRobot.drive, velocityX, velocityY, rotationalRate, roleIsRedAlliance(role));
+	} // End runHumanControlSim
+
+	private CommandXboxController humanControllerForRole(int role, boolean secondSimEnabled) {
+		Integer port = switch (role) {
+			case SimStartingPoseFullFieldSim.ROLE_BLUE_2 -> kHumanControllerPortBlue2;
+			case SimStartingPoseFullFieldSim.ROLE_BLUE_3 -> kHumanControllerPortBlue3;
+			case SimStartingPoseFullFieldSim.ROLE_RED_1 -> kHumanControllerPortRed1;
+			case SimStartingPoseFullFieldSim.ROLE_RED_2 -> kHumanControllerPortRed2;
+			case SimStartingPoseFullFieldSim.ROLE_RED_3 -> kHumanControllerPortRed3;
+			default -> null;
+		};
+		if (port == null) {
+			return null;
+		}
+		Integer cachedPort = humanControllerPortByRole.get(role);
+		if (cachedPort == null || cachedPort != port) {
+			CommandXboxController controller = new CommandXboxController(port);
+			humanControllerByRole.put(role, controller);
+			humanControllerPortByRole.put(role, port);
+			return controller;
+		}
+		return humanControllerByRole.get(role);
+	} // End humanControllerForRole
+
+	private ProfiledPIDController faceTargetControllerForRole(int role) {
+		return humanFaceTargetControllerByRole.computeIfAbsent(
+				role,
+				key -> {
+					ProfiledPIDController controller =
+							new ProfiledPIDController(
+									DriveCommands.getAngleKp(),
+									0.0,
+									DriveCommands.getAngleKd(),
+									new TrapezoidProfile.Constraints(
+											DriveCommands.getAngleMaxVelocity(),
+											DriveCommands.getAngleMaxAcceleration()));
+					controller.enableContinuousInput(-Math.PI, Math.PI);
+					return controller;
+				});
+	} // End faceTargetControllerForRole
+
+	/** Returns omega command to point the Kitbot rear shooter at the hub. */
+	private static double computeOmegaToFaceHubRear(Drive drive, ProfiledPIDController faceTargetController) {
+		Rotation2d angleFromPivotToHub = ShooterCommands.getFieldAngleToHubFromPivot(drive);
+		Rotation2d rearFacingTarget = angleFromPivotToHub.plus(Rotation2d.fromRadians(kKitbotRearShooterYawOffsetRad));
+		return faceTargetController.calculate(drive.getRotation().getRadians(), rearFacingTarget.getRadians());
+	} // End computeOmegaToFaceHubRear
+
+	/** Field-centric drive with blue-origin alliance flip (red gets +180 deg reference rotation). */
+	private static void driveFieldRelativeForAlliance(
+			Drive drive, double vxMetersPerSec, double vyMetersPerSec, double omegaRadPerSec, boolean redAlliance) {
+		Rotation2d referenceRotation = redAlliance
+				? drive.getRotation().plus(Rotation2d.fromRadians(Math.PI))
+				: drive.getRotation();
+		drive.runVelocity(ChassisSpeeds.fromFieldRelativeSpeeds(
+				vxMetersPerSec, vyMetersPerSec, omegaRadPerSec, referenceRotation));
+	} // End driveFieldRelativeForAlliance
+
+	/** Mirrors ShootWhenReady auto target selection for extras (hub in alliance zone, pass spot otherwise). */
+	private static void autoSelectShootingTargetForExtra(SimFullFieldExtraRobot extraRobot, boolean redAlliance) {
+		ShooterCommands.registerTargetAllianceSupplier(extraRobot.drive, () -> redAlliance);
+		Pose2d pose = extraRobot.drive.getPose();
+		double zoneTolerance = ShooterConstants.kAutoSelectShootingTargetAllianceZoneTolerance;
+		boolean inAllianceZone = redAlliance
+				? pose.getX() > FieldConstants.FIELD_LENGTH_M - FieldConstants.ALLIANCE_ZONE_M - zoneTolerance
+				: pose.getX() < FieldConstants.ALLIANCE_ZONE_M + zoneTolerance;
+		if (inAllianceZone) {
+			ShooterCommands.clearShooterTargetOverride(extraRobot.drive);
+			return;
+		}
+		boolean aboveCenterY = pose.getY() > FieldConstants.FIELD_CENTER_Y_M;
+		boolean passLeft = aboveCenterY ^ redAlliance;
+		if (passLeft) {
+			ShooterCommands.setPassingSpotLeft(extraRobot.drive);
+		} else {
+			ShooterCommands.setPassingSpotRight(extraRobot.drive);
+		}
+	} // End autoSelectShootingTargetForExtra
 
 	// ===== Defense Block =====
 
@@ -807,6 +962,8 @@ public final class SimFullFieldExtraBehaviourSim {
 		state.aggressiveRamContactTick = -1;
 		clearTwoPathCycleTravelState(state);
 		state.twoPathCyclePhase = null;
+		humanPrevRightBumperByRole.remove(role);
+		humanControllerPortByRole.remove(role);
 	} // End clearTransientExtraMotionCaches
 
 	/** Drops cached plan output on {@code cache}; keeps pathfinder so AD* can resume warm. */
@@ -955,7 +1112,8 @@ public final class SimFullFieldExtraBehaviourSim {
 				}
 				break;
 			case SCORE_HUB:
-				runTwoPathCycleHubScoringTick(extraRobot, state, fuelSim, fuelSimEnabled, red);
+				autoSelectShootingTargetForExtra(extraRobot, red);
+				runTwoPathCycleHubScoringTick(extraRobot, state, fuelSim, fuelSimEnabled);
 				break;
 			default:
 				extraRobot.drive.stop();
@@ -1169,15 +1327,12 @@ public final class SimFullFieldExtraBehaviourSim {
 	 * Aims the whole robot like a fixed forward turret and launches one fuel when facing, timing, and fuel state allow.
 	 * Hood and exit speed follow {@link ShooterCalculator#iterativeMovingShotFromFunnelClearance} without
 	 * {@link frc.robot.subsystems.shooter.hood.HoodConstants} clamping.
-	 *
-	 * @param redAlliance selects red vs blue funnel-top hub target
 	 */
 	private void runTwoPathCycleHubScoringTick(
 			SimFullFieldExtraRobot extraRobot,
 			RoleState state,
 			FuelSim fuelSim,
-			boolean fuelSimEnabled,
-			boolean redAlliance) {
+			boolean fuelSimEnabled) {
 		if (carriedFuelForExtra(extraRobot, fuelSim, fuelSimEnabled) <= 0) {
 			extraRobot.drive.stop();
 			return;
@@ -1185,8 +1340,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		// Shooter aims from believed (odometry) pose, not ground-truth sim pose, to match real robot behavior.
 		Pose2d pose = extraRobot.drive.getPose();
 		ChassisSpeeds fieldSpeeds = extraRobot.drive.getFieldRelativeChassisSpeeds();
-		Translation3d target3d =
-				redAlliance ? FieldConstants.RED_FUNNEL_TOP_CENTER_3D : FieldConstants.BLUE_FUNNEL_TOP_CENTER_3D;
+		Translation3d target3d = ShooterCommands.getShooterTarget3d(extraRobot.drive);
 
 		Pose2d estimatedPose = estimateLookaheadPose(pose, fieldSpeeds, ShooterConstants.kPhaseDelaySec);
 		Pose2d estimatedLaunchPose = launchPointPoseFromRobotPose(estimatedPose, kKitbotShooterPos);

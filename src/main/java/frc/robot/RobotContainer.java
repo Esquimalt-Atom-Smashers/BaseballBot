@@ -35,6 +35,7 @@ import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.*;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.commands.*;
 import frc.robot.generated.TunerConstants;
 import frc.robot.simulation.FuelSim;
@@ -547,9 +548,12 @@ public class RobotContainer {
 			return;
 		}
 
+		// Operator Control Gate
+		Trigger operatorControlGate = new Trigger(this::isOperatorControlsEnabled);
+
 		// Intake Manual Voltage Control
 		// Raise Intake voltage
-		operatorController.povLeft().onTrue(
+		operatorController.povLeft().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> intake.stepVoltage(IntakeConstants.kStepVolts), intake),
 				new InstantCommand(),
@@ -557,7 +561,7 @@ public class RobotContainer {
 			)
 		);
 		// Lower Intake voltage
-		operatorController.povRight().onTrue(
+		operatorController.povRight().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> intake.stepVoltage(-IntakeConstants.kStepVolts), intake),
 				new InstantCommand(),
@@ -567,7 +571,7 @@ public class RobotContainer {
 
 		// Extender Manual Position Control
 		// Raise Extender Position
-		operatorController.leftTrigger().onTrue(
+		operatorController.leftTrigger().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> {
 					extender.stepPositionRad(ExtenderConstants.kStepRadUp);
@@ -576,7 +580,7 @@ public class RobotContainer {
 				() -> extender != null)
 		);
 		// Lower Extender Position
-		operatorController.rightTrigger().onTrue(
+		operatorController.rightTrigger().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> {
 					extender.stepPositionRad(-ExtenderConstants.kStepRadDown);
@@ -587,7 +591,7 @@ public class RobotContainer {
 
 		// Hang Manual Position Control
 		// Raise Hang (Extend)
-		operatorController.b().onTrue(
+		operatorController.b().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> hang.stepPositionMeters(HangConstants.kStepMeters), hang),
 				new InstantCommand(),
@@ -595,7 +599,7 @@ public class RobotContainer {
 			)
 		);
 		// Lower Hang (Retract)
-		operatorController.x().onTrue(
+		operatorController.x().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> hang.stepPositionMeters(-HangConstants.kStepMeters), hang),
 				new InstantCommand(),
@@ -607,7 +611,7 @@ public class RobotContainer {
 		// ------------------------------------------ Operator Manual Override ------------------------------------------
 		// If Manual Override is false, become true. 
 		// If true, reset encoder positions and then become false.
-		operatorController.back().onTrue(
+		operatorController.back().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> operatorManualOverride = false),
 				Commands.runOnce(() -> operatorManualOverride = true),
@@ -615,7 +619,7 @@ public class RobotContainer {
 
 		// Agitator Manual Voltage Control
 		// Raise Agitator voltage
-		operatorController.y().onTrue(
+		operatorController.y().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> agitator.stepVoltage(AgitatorConstants.kStepVolts), agitator),
 				new InstantCommand(),
@@ -623,7 +627,7 @@ public class RobotContainer {
 			)
 		);
 		// Lower Agitator voltage
-		operatorController.a().onTrue(
+		operatorController.a().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> agitator.stepVoltage(-AgitatorConstants.kStepVolts), agitator),
 				new InstantCommand(),
@@ -633,7 +637,7 @@ public class RobotContainer {
 
 		// Transfer Manual Voltage Control
 		// Raise Transfer voltage
-		operatorController.leftBumper().onTrue(
+		operatorController.leftBumper().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> transfer.stepVoltage(TransferConstants.kStepVolts), transfer),
 				new InstantCommand(),
@@ -641,7 +645,7 @@ public class RobotContainer {
 			)
 		);
 		// Lower Transfer voltage
-		operatorController.rightBumper().onTrue(
+		operatorController.rightBumper().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> transfer.stepVoltage(-TransferConstants.kStepVolts), transfer),
 				new InstantCommand(),
@@ -651,7 +655,7 @@ public class RobotContainer {
 		
 		// Turret Manual Position Control
 		// Step Turret position up
-		operatorController.leftStick().onTrue(
+		operatorController.leftStick().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> turret.stepPositionRad(TurretConstants.kStepRad), turret),
 				new InstantCommand(),
@@ -659,7 +663,7 @@ public class RobotContainer {
 			)
 		);
 		// Step Turret position down
-		operatorController.rightStick().onTrue(
+		operatorController.rightStick().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> turret.stepPositionRad(-TurretConstants.kStepRad), turret),
 				new InstantCommand(),
@@ -667,7 +671,7 @@ public class RobotContainer {
 			)
 		);
 		// Reset Extender and Turret Encoder, and Idle all subsystems.
-		operatorController.start().onTrue(
+		operatorController.start().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> {
 					extender.resetEncoders();
@@ -682,7 +686,7 @@ public class RobotContainer {
 
 		// Flywheel Manual Velocity Control
 		// Raise Flywheel RPM
-		operatorController.povUp().onTrue(
+		operatorController.povUp().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> flywheel.stepVelocityRadPerSec(FlywheelConstants.kStepRadPerSec), flywheel),
 				new InstantCommand(),
@@ -690,7 +694,7 @@ public class RobotContainer {
 			)
 		);
 		// Lower Flywheel RPM
-		operatorController.povDown().onTrue(
+		operatorController.povDown().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> flywheel.stepVelocityRadPerSec(-FlywheelConstants.kStepRadPerSec), flywheel),
 				new InstantCommand(),
@@ -757,6 +761,13 @@ public class RobotContainer {
 				false,
 				() -> simSecondRobotSession.isDriveEnabledFromDashboard());
 	} // End createSecondSimDriverBindParams
+
+	/** Disable operator bindings when full-field extras are enabled in SIM (port 1 is reassigned to Blue-2). */
+	private boolean isOperatorControlsEnabled() {
+		return !(Constants.currentMode == Constants.Mode.SIM
+				&& simSpawnSim != null
+				&& simSpawnSim.extrasEnabled());
+	} // End isOperatorControlsEnabled
 
 	/// -----------------------------------------------------------------------------------------------------------------
 	/// ------------------------------------------- Autonomous Commands Only --------------------------------------------
@@ -1153,8 +1164,16 @@ public class RobotContainer {
 	 * @param fuelRobotIndex registered robot index on {@link FuelSim}
 	 */
 	private void registerFuelSimExtraRobotIntake(int fuelRobotIndex) {
-		registerFuelSimFrontIntakeBox(
+		double robotWidthMeters = 0.8382;
+		double robotLengthMeters = 0.83312;
+		double intakeExtendMeters = 3.0 * 0.0254;
+		double intakeInsetMeters = 0.20955;
+		fuelSim.registerIntake(
 				fuelRobotIndex,
+				robotLengthMeters / 2.0,
+				robotLengthMeters / 2.0 + intakeExtendMeters,
+				-robotWidthMeters / 2 + intakeInsetMeters,
+				robotWidthMeters / 2 - intakeInsetMeters,
 				() -> fuelSim.getCarriedFuelCount(fuelRobotIndex) < fuelSim.getCarriedFuelMaxForRobotIndex(fuelRobotIndex),
 				() -> {});
 	} // End registerFuelSimExtraRobotIntake
@@ -1452,6 +1471,8 @@ public class RobotContainer {
 					fullFieldExtraRobot.driveSimulation,
 					FuelSim.kCarriedFuelRowsBackToFrontSimExtra);
 			fullFieldExtraRobot.fuelRobotIndex = fuelIdx;
+			fuelSim.setCarriedFuelCount(fuelIdx, ShooterSim.kInitialFuelStored);
+			fuelSim.registerShooterFuelReset(() -> fuelSim.setCarriedFuelCount(fuelIdx, ShooterSim.kInitialFuelStored));
 			registerFuelSimExtraRobotIntake(fuelIdx);
 		}
 		if (poolIdx >= 0 && poolIdx < extraRobotsByPool.length) {
