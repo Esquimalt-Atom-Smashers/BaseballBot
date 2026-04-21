@@ -81,6 +81,10 @@ public class Extender extends SubsystemBase {
         extenderIO.setTargetPosition(targetPositionRad);
         break;
       case IDLE:
+        if (getPositionRad() > kExtendedExtenderRad - kAtTargetToleranceRad) {
+          setExtendedState();
+          break;
+        }
       default:
         extenderIO.stop();
         break;
