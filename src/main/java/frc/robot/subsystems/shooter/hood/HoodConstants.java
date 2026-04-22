@@ -76,7 +76,7 @@ public final class HoodConstants { // XXX: Add correct values
   public static final double kMaxVoltage = 12.0;
 
   /** Tolerance for considering the Hood at target (measured vs target). */
-  public static final double kAtTargetToleranceRad = Units.degreesToRadians(2.0);
+  public static final double kAtTargetToleranceRad = Units.degreesToRadians(1.0);
 
   /** Sim only: max Hood setpoint slew rate. */
   public static final double kSimMaxSlewRadPerSec = Units.degreesToRadians(60.0);

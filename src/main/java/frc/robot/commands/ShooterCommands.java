@@ -296,11 +296,10 @@ public final class ShooterCommands {
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityMps", exitVelMps);
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditive", exitVelocityMultiplierAdditive);
 
-    double hoodAngleRad = hood.clampTargetAngle(hoodAngleRadFromSolve);
     if (enableCalculator) {
       if (hoodEnabled) {
         if (shootWhenReadyActive) {
-          hood.setTargetAngleRad(hoodAngleRad);
+          hood.setTargetAngleRad(hoodAngleRadFromSolve);
         } else {
           hood.setTargetAngleRad(HoodConstants.kDisabledAngleRad);
         }

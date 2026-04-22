@@ -13,6 +13,8 @@ import org.littletonrobotics.junction.Logger;
 /** Hood subsystem: one motor with onboard position control. */
 public class Hood extends SubsystemBase {
 
+  private static final String kTargetPositionDegKey = "Hood/TargetPositionDeg";
+
   /** Hood state: Idle, Tracking (approaching target), At_Target, or Manual. */
   public enum State {
     IDLE,
@@ -30,6 +32,9 @@ public class Hood extends SubsystemBase {
   private double lastTargetAngleRad = kDisabledAngleRad;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
+  private BooleanSupplier useSmartDashboardWhenManualOverrideSupplier = () -> false;
+  private double lastHoodTargetDashboardWriteDeg = Double.NaN;
+
   public Hood(HoodIO io) {
     this(io, "");
   } // End Hood Constructor
@@ -41,30 +46,42 @@ public class Hood extends SubsystemBase {
     SmartDashboard.putNumber("Hood/kP", kP);
     SmartDashboard.putNumber("Hood/kI", kI);
     SmartDashboard.putNumber("Hood/kD", kD);
-    SmartDashboard.putNumber("Hood/TargetPositionDeg", Units.radiansToDegrees(targetAngleRad));
+    SmartDashboard.putNumber(kTargetPositionDegKey, Units.radiansToDegrees(targetAngleRad));
   } // End Hood Constructor
 
   @Override
   public void periodic() {
     hoodIO.updateInputs(hoodInputs);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(targetAngleRad));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
 
     if (DriverStation.isDisabled()) {
       state = State.IDLE;
       hoodIO.stop();
+      lastHoodTargetDashboardWriteDeg = Double.NaN;
       return;
     }
 
-    // Update the target position.
-    targetAngleRad = getSetpointRad();
+    // Manual override: SmartDashboard and/or stepPositionRad (MANUAL). Do not read NT every MANUAL cycle — that would
+    // undo steps; resume NT control when the widget differs from our last publish value.
+    if (useSmartDashboardWhenManualOverrideSupplier.getAsBoolean()) {
+      double setpointDeg = Units.radiansToDegrees(getSetpointRad());
+      double deg = SmartDashboard.getNumber(kTargetPositionDegKey, setpointDeg);
+      if (state == State.MANUAL) {
+        if (!Double.isNaN(lastHoodTargetDashboardWriteDeg)
+            && Math.abs(deg - lastHoodTargetDashboardWriteDeg) > Units.radiansToDegrees(kAtTargetToleranceRad)) {
+          setTargetAngleRad(Units.degreesToRadians(deg));
+          setState(State.TRACKING);
+        } else {
+          targetAngleRad = getSetpointRad();
+        }
+      } else {
+        setTargetAngleRad(Units.degreesToRadians(deg));
+      }
+    } else {
+      targetAngleRad = getSetpointRad();
+    }
+    double publishedDeg = Units.radiansToDegrees(getSetpointRad());
+    SmartDashboard.putNumber(kTargetPositionDegKey, publishedDeg);
+    lastHoodTargetDashboardWriteDeg = publishedDeg;
 
     if (targetAngleRad != lastTargetAngleRad && state != State.MANUAL) {
       setState(State.TRACKING);
@@ -98,6 +115,17 @@ public class Hood extends SubsystemBase {
         hoodIO.stop();
         break;
     }
+
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(getSetpointRad()));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/UseSmartDashboardWhenManualOverride", useSmartDashboardWhenManualOverrideSupplier.getAsBoolean());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
   } // End periodic
 
   /** Set the Hood state. */
@@ -148,6 +176,11 @@ public class Hood extends SubsystemBase {
   public void setIgnoreLimitsSupplier(BooleanSupplier supplier) {
     ignoreLimitsSupplier = supplier != null ? supplier : () -> false;
   } // End setIgnoreLimitsSupplier
+
+  /** When supplier is true, hood follows SmartDashboard / steps during operator manual override. */
+  public void setUseSmartDashboardTarget(BooleanSupplier supplier) {
+    useSmartDashboardWhenManualOverrideSupplier = supplier != null ? supplier : () -> false;
+  } // End setUseSmartDashboardTarget
 
   /** Step the target angle in radians. */
   public void stepPositionRad(double stepPositionRad) {

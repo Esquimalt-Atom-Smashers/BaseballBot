@@ -325,12 +325,13 @@ public class RobotContainer {
 				SafeRetractExtenderCommand.create(
 						shootWhenReadyCommand, flywheel, extender, turret, b -> driverTurretOverride = b);
 
-		// Subsystem Manual Override Ignore Limits Supplier
+		// Subsystem Manual Override Ignore Limits and Use SmartDashboard Supplier
 		intake.setIgnoreLimitsSupplier(() 	-> operatorManualOverride);
 		extender.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		agitator.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		transfer.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		hood.setIgnoreLimitsSupplier(() 		-> operatorManualOverride);
+		hood.setUseSmartDashboardTarget(()  -> operatorManualOverride);
 		flywheel.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		hang.setIgnoreLimitsSupplier(() 		-> operatorManualOverride);
 
@@ -1407,6 +1408,7 @@ public class RobotContainer {
 		secondSimRobotBundle.agitator.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.transfer.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.hood.setIgnoreLimitsSupplier(() 		 -> false);
+		secondSimRobotBundle.hood.setUseSmartDashboardTarget(()  -> false);
 		secondSimRobotBundle.flywheel.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.hang.setIgnoreLimitsSupplier(() 		 -> false);
 

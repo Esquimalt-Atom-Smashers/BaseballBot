@@ -18,8 +18,7 @@ public class HoodIOSim implements HoodIO {
   @Override
   public void updateInputs(HoodIOInputs inputs) {
     if (!isStopped) {
-      double commandedRad = MathUtil.clamp(targetPositionRad, kMinAngleRad, kMaxAngleRad);
-      double errorRad = commandedRad - currentPositionRad;
+      double errorRad = targetPositionRad - currentPositionRad;
       double maxStepRad = kSimMaxSlewRadPerSec * kLoopPeriodSecs;
       double stepRad = MathUtil.clamp(errorRad, -maxStepRad, maxStepRad);
       currentPositionRad += stepRad;
