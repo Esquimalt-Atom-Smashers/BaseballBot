@@ -173,8 +173,8 @@ public final class ShooterCommands {
    * Turret aim uses predicted target and shortest-path azimuth.
    * When {@code enableCalculator} is false (e.g. manual override), Hood and Flywheel targets are
    * not updated so manual override controls are functional.
-   * When {@code shootWhenReadyActive} is false and {@code hoodEnabled} is true, Hood target is held at
-   * {@link HoodConstants#kMaxAngleRad}; calculator hood angle is applied only while ShootWhenReady is active
+   * When {@code shootWhenReadyActive} is false and {@code hoodEnabled} is true, Hood target is set to
+   * {@link HoodConstants#kDisabledAngleRad}; calculator hood angle is applied only while ShootWhenReady is active
    * ({@link frc.robot.subsystems.shooter.Shooter#isShootCommandActive()}).
    *
    * @param calculatorLogRoot AdvantageKit prefix; primary {@code ""}, second sim {@link
@@ -243,7 +243,7 @@ public final class ShooterCommands {
         if (shootWhenReadyActive) {
           hood.setTargetAngleRad(hoodAngleRad);
         } else {
-          hood.setTargetAngleRad(HoodConstants.kMaxAngleRad);
+          hood.setTargetAngleRad(HoodConstants.kDisabledAngleRad);
         }
       }
       flywheel.setTargetVelocityRadPerSec(flywheelRadPerSec);

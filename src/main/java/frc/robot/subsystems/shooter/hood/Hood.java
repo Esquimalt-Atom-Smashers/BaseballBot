@@ -51,6 +51,7 @@ public class Hood extends SubsystemBase {
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(targetAngleRad));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
@@ -70,13 +71,33 @@ public class Hood extends SubsystemBase {
     }
     lastTargetAngleRad = targetAngleRad;
 
-    if (!atTarget() && state == State.AT_TARGET) {
-      state = State.TRACKING;
-    } else if (atTarget() && state == State.TRACKING) {
-      state = State.AT_TARGET;
-    }
+    switch (state) {
+      case TRACKING:
+      case AT_TARGET:
+        if (atTarget()) {
+          setState(State.AT_TARGET);
 
-    hoodIO.setTargetPosition(state == State.IDLE ? kDisabledAngleRad : getSetpointRad());
+          // If the target angle is disabled and the hood angle is greater than the disabled angle, set the state to IDLE.
+          if (targetAngleRad == kDisabledAngleRad && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
+            setState(State.IDLE);
+          } else {
+            hoodIO.setTargetPosition(getSetpointRad());
+          }
+        } else {
+          setState(State.TRACKING);
+          hoodIO.setTargetPosition(getSetpointRad());
+        }
+        break;
+      case MANUAL:
+        hoodIO.setTargetPosition(getSetpointRad());
+        break;
+      case IDLE:
+        hoodIO.stop();
+        break;
+      default:
+        hoodIO.stop();
+        break;
+    }
   } // End periodic
 
   /** Set the Hood state. */

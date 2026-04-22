@@ -18,6 +18,24 @@ public final class HoodConstants { // XXX: Add correct values
   /** Analog input ID of the Hood encoder. */
   public static final int kEncoderId = 1;
 
+  /** Axon servo value (0–1) when hood is at 0° (shot straight out forward of the robot, parallel to the ground). */
+  public static final double kServoSetAt0deg = 0.42;
+
+  /** Axon servo value (0–1) when hood is at 90° (shot straight up along field +Z). */
+  public static final double kServoSetAt90deg = 0.58;
+
+  /**
+   * Precomputed slope for {@link HoodIOAxon}: turns a hood elevation setpoint (rad, 0 = out … π/2 = up)
+   * into a {@code Servo.set} value (0–1) using the two calibrated endpoints {@link #kServoSetAt0deg} and {@link #kServoSetAt90deg}.
+   */
+  public static final double kServoSetPerHoodAngleRad = (kServoSetAt90deg - kServoSetAt0deg) / (Math.PI / 2.0);
+
+  /** Axon analog voltage when hood is at 0° (shot forward, parallel to the ground). */
+  public static final double kAnalogVoltsAt0deg = 2.5;
+
+  /** Axon analog voltage when hood is at 90° (shot straight up, +Z). */
+  public static final double kAnalogVoltsAt90deg = 1.4;
+
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kBrake;
 
