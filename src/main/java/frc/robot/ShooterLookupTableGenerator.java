@@ -58,7 +58,7 @@ public final class ShooterLookupTableGenerator {
     for (Row r : rows) {
       double hood = r.hoodDeg();
       System.out.printf(
-          "        new TableEntry(%.6f, %.4f, %.4f, %.4f, %.6f),%n",
+          "        new TableEntry(%.2f, %.1f, %.1f, %.0f, %.2f),%n",
           r.dNom(), hood, hood, r.rpm(), r.tofSec());
     }
   }

@@ -296,7 +296,7 @@ public class ShooterCalculator {
         }
         return new LookupTableMovingShot(
                 lr.hoodExitAngleRad(),
-                lr.commandedHoodAngleRad(),
+                lr.hoodAngleRad(),
                 lr.flywheelRpmTable(),
                 lr.timeOfFlightSec(),
                 predicted,
