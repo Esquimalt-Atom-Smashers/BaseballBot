@@ -61,4 +61,10 @@ public final class TurretConstants {
 
   /** Delta Rad per step. */
   public static final double kStepRad = Units.degreesToRadians(5.0);
+
+  /**
+   * Sim-only cap on commanded turret angular rate (rad/s). Toy plant in {@link frc.robot.subsystems.shooter.turret.TurretIOSim};
+   * set high enough that lag is not dominated by this limit when testing spin tracking.
+   */
+  public static final double kSimMaxTurretRadPerSec = 12.0;
 }

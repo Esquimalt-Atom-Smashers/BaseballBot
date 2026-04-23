@@ -118,6 +118,42 @@ public class ShooterCalculator {
         return Radians.of(angleRad);
     }
 
+    /**
+     * Time derivative of the robot-frame azimuth from turret pivot to a field-fixed XY point (rad/s),
+     * matching the angle in {@link #calculateAzimuthAngle(Pose2d, Translation3d)}. Use as turret
+     * velocity feedforward: when the pivot orbits the robot center during yaw, field bearing to the
+     * hub changes, so {@code -omega} alone is incomplete.
+     *
+     * <p>Model: target fixed; pivot moves with the chassis. ψ = φ − θ with φ = atan2(w) in field and
+     * θ robot heading, so dψ/dt = dφ/dt − ω.
+     */
+    public static double robotFramePivotToTargetAimRateRadPerSec(
+            Pose2d robotPose, ChassisSpeeds robotRelativeSpeeds, Translation2d targetXY) {
+        Translation2d rBody = new Translation2d(robotToTurret.getX(), robotToTurret.getY());
+        double omega = robotRelativeSpeeds.omegaRadiansPerSecond;
+
+        Translation2d pivotField = turretTranslationOnField(robotPose);
+        Translation2d w = targetXY.minus(pivotField);
+        double wNormSq = w.getNorm() * w.getNorm();
+        if (wNormSq < 1e-8) {
+            return -omega;
+        }
+
+        // Pivot velocity in robot frame (origin translation + ω×r), then rotate to field.
+        Translation2d vPivotRobot =
+                new Translation2d(
+                        robotRelativeSpeeds.vxMetersPerSecond - omega * rBody.getY(),
+                        robotRelativeSpeeds.vyMetersPerSecond + omega * rBody.getX());
+        Translation2d vPivotField = vPivotRobot.rotateBy(robotPose.getRotation());
+
+        double wx = w.getX();
+        double wy = w.getY();
+        double dwx = -vPivotField.getX();
+        double dwy = -vPivotField.getY();
+        double dPhiDt = (wx * dwy - wy * dwx) / wNormSq;
+        return dPhiDt - omega;
+    } // End robotFramePivotToTargetAimRateRadPerSec
+
     // Move a target a set time in the future along a velocity defined by fieldSpeeds
     public static Translation3d predictTargetPos(Translation3d target, ChassisSpeeds fieldSpeeds, Time timeOfFlight) {
         double predictedX = target.getX() - fieldSpeeds.vxMetersPerSecond * timeOfFlight.in(Seconds);
