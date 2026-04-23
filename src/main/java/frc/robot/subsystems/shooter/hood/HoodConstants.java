@@ -2,6 +2,7 @@ package frc.robot.subsystems.shooter.hood;
 
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import com.revrobotics.spark.config.SparkBaseConfig;
+
 import edu.wpi.first.math.util.Units;
 
 /** Constants for the Hood (position-controlled Shooter angle) subsystem. */
@@ -19,22 +20,28 @@ public final class HoodConstants { // XXX: Add correct values
   public static final int kEncoderId = 1;
 
   /** Axon servo value (0–1) when hood is at 0° (shot straight out forward of the robot, parallel to the ground). */
-  public static final double kServoSetAt0deg = 0.42;
+  public static final double kServoSetAt0deg = 0.7613333333333335;
 
-  /** Axon servo value (0–1) when hood is at 90° (shot straight up along field +Z). */
-  public static final double kServoSetAt90deg = 0.58;
+  /** Axon servo value (0–1) when hood is at 80°. */
+  public static final double kServoSetAt80deg = 0.5195555555555554;
 
   /**
-   * Precomputed slope for {@link HoodIOAxon}: turns a hood elevation setpoint (rad, 0 = out … π/2 = up)
-   * into a {@code Servo.set} value (0–1) using the two calibrated endpoints {@link #kServoSetAt0deg} and {@link #kServoSetAt90deg}.
+   * Upper hood elevation (rad from horizontal) used for analog + servo calibration. Low endpoint is 0 rad; high
+   * endpoint readings match {@link #kServoSetAt80deg} and {@link #kAnalogVoltsAt80deg}.
    */
-  public static final double kServoSetPerHoodAngleRad = (kServoSetAt90deg - kServoSetAt0deg) / (Math.PI / 2.0);
+  public static final double kAnalogServoCalibHighAngleRad = Units.degreesToRadians(80.0);
+
+  /**
+   * Precomputed slope for {@link HoodIOAxon}: hood elevation (rad, 0 = forward … {@link #kAnalogServoCalibHighAngleRad} = calibrated high)
+   * to {@code Servo.set} (0–1) using {@link #kServoSetAt0deg} and {@link #kServoSetAt80deg}.
+   */
+  public static final double kServoSetPerHoodAngleRad = (kServoSetAt80deg - kServoSetAt0deg) / kAnalogServoCalibHighAngleRad;
 
   /** Axon analog voltage when hood is at 0° (shot forward, parallel to the ground). */
-  public static final double kAnalogVoltsAt0deg = 2.5;
+  public static final double kAnalogVoltsAt0deg = 2.4;
 
-  /** Axon analog voltage when hood is at 90° (shot straight up, +Z). */
-  public static final double kAnalogVoltsAt90deg = 1.4;
+  /** Axon analog voltage when hood is at {@link #kAnalogServoCalibHighAngleRad} (same mechanical pose as {@link #kServoSetAt80deg}). */
+  public static final double kAnalogVoltsAt80deg = 1.715;
 
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kBrake;
@@ -69,8 +76,8 @@ public final class HoodConstants { // XXX: Add correct values
   /** Minimum travel elevation (deg from horizontal); shallower shot. */
   public static final double kMinAngleRad = Units.degreesToRadians(50.0);
 
-  /** Maximum travel elevation (deg from horizontal); steeper shot. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(80.0);
+  /** Maximum travel elevation (rad from horizontal); matches analog/servo high calibration. */
+  public static final double kMaxAngleRad = kAnalogServoCalibHighAngleRad;
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;

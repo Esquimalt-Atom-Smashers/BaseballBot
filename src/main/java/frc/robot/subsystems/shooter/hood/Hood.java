@@ -14,6 +14,10 @@ import org.littletonrobotics.junction.Logger;
 public class Hood extends SubsystemBase {
 
   private static final String kTargetPositionDegKey = "Hood/TargetPositionDeg";
+  private static final String kTargetSetPosKey = "Hood/TargetServoSetPos";
+
+  /** Minimum change on the raw servo (0–1) NT widget to count as operator input vs our publish echo. */
+  private static final double kServoSetWidgetEpsilon = 1e-3;
 
   /** Hood state: Idle, Tracking (approaching target), At_Target, or Manual. */
   public enum State {
@@ -32,8 +36,9 @@ public class Hood extends SubsystemBase {
   private double lastTargetAngleRad = kDisabledAngleRad;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
 
-  private BooleanSupplier useSmartDashboardWhenManualOverrideSupplier = () -> false;
+  private BooleanSupplier useSmartDashboardSupplier = () -> false;
   private double lastHoodTargetDashboardWriteDeg = Double.NaN;
+  private double lastHoodTargetServoSetWrite = Double.NaN;
 
   public Hood(HoodIO io) {
     this(io, "");
@@ -47,6 +52,7 @@ public class Hood extends SubsystemBase {
     SmartDashboard.putNumber("Hood/kI", kI);
     SmartDashboard.putNumber("Hood/kD", kD);
     SmartDashboard.putNumber(kTargetPositionDegKey, Units.radiansToDegrees(targetAngleRad));
+    SmartDashboard.putNumber(kTargetSetPosKey, 0.5);
   } // End Hood Constructor
 
   @Override
@@ -57,12 +63,13 @@ public class Hood extends SubsystemBase {
       state = State.IDLE;
       hoodIO.stop();
       lastHoodTargetDashboardWriteDeg = Double.NaN;
+      lastHoodTargetServoSetWrite = Double.NaN;
       return;
     }
 
     // Manual override: SmartDashboard and/or stepPositionRad (MANUAL). Do not read NT every MANUAL cycle — that would
     // undo steps; resume NT control when the widget differs from our last publish value.
-    if (useSmartDashboardWhenManualOverrideSupplier.getAsBoolean()) {
+    if (useSmartDashboardSupplier.getAsBoolean()) {
       double setpointDeg = Units.radiansToDegrees(getSetpointRad());
       double deg = SmartDashboard.getNumber(kTargetPositionDegKey, setpointDeg);
       if (state == State.MANUAL) {
@@ -82,6 +89,18 @@ public class Hood extends SubsystemBase {
     double publishedDeg = Units.radiansToDegrees(getSetpointRad());
     SmartDashboard.putNumber(kTargetPositionDegKey, publishedDeg);
     lastHoodTargetDashboardWriteDeg = publishedDeg;
+
+    boolean manualDirectServo = false;
+    double manualServoSetClamped = 0.5;
+    if (useSmartDashboardSupplier.getAsBoolean() && state == State.MANUAL) {
+      double defaultServo = servoSetForDashboardRad(getSetpointRad());
+      double rawServo = SmartDashboard.getNumber(kTargetSetPosKey, defaultServo);
+      if (!Double.isNaN(lastHoodTargetServoSetWrite)
+          && Math.abs(rawServo - lastHoodTargetServoSetWrite) > kServoSetWidgetEpsilon) {
+        manualDirectServo = true;
+        manualServoSetClamped = MathUtil.clamp(rawServo, 0.0, 1.0);
+      }
+    }
 
     if (targetAngleRad != lastTargetAngleRad && state != State.MANUAL) {
       setState(State.TRACKING);
@@ -106,7 +125,11 @@ public class Hood extends SubsystemBase {
         }
         break;
       case MANUAL:
-        hoodIO.setTargetPosition(getSetpointRad());
+        if (manualDirectServo) {
+          hoodIO.setServoPosition(manualServoSetClamped);
+        } else {
+          hoodIO.setTargetPosition(getSetpointRad());
+        }
         break;
       case IDLE:
         hoodIO.stop();
@@ -116,6 +139,10 @@ public class Hood extends SubsystemBase {
         break;
     }
 
+    double publishedServoSet = manualDirectServo ? manualServoSetClamped : servoSetForDashboardRad(getSetpointRad());
+    SmartDashboard.putNumber(kTargetSetPosKey, publishedServoSet);
+    lastHoodTargetServoSetWrite = publishedServoSet;
+
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
@@ -123,7 +150,7 @@ public class Hood extends SubsystemBase {
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(getSetpointRad()));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/UseSmartDashboardWhenManualOverride", useSmartDashboardWhenManualOverrideSupplier.getAsBoolean());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/UseSmartDashboardWhenManualOverride", useSmartDashboardSupplier.getAsBoolean());
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
   } // End periodic
@@ -172,6 +199,12 @@ public class Hood extends SubsystemBase {
     return ignoreLimitsSupplier.getAsBoolean() ? targetAngleRad : clampTargetAngle(targetAngleRad);
   } // End getSetpointRad
 
+  /** Servo.set (0–1) from hood angle. */
+  private static double servoSetForDashboardRad(double hoodAngleRad) {
+    double u = kServoSetAt0deg + kServoSetPerHoodAngleRad * hoodAngleRad;
+    return MathUtil.clamp(u, 0.0, 1.0);
+  } // End servoSetForDashboardRad
+
   /** Set supplier for ignoring limits. */
   public void setIgnoreLimitsSupplier(BooleanSupplier supplier) {
     ignoreLimitsSupplier = supplier != null ? supplier : () -> false;
@@ -179,7 +212,7 @@ public class Hood extends SubsystemBase {
 
   /** When supplier is true, hood follows SmartDashboard / steps during operator manual override. */
   public void setUseSmartDashboardTarget(BooleanSupplier supplier) {
-    useSmartDashboardWhenManualOverrideSupplier = supplier != null ? supplier : () -> false;
+    useSmartDashboardSupplier = supplier != null ? supplier : () -> false;
   } // End setUseSmartDashboardTarget
 
   /** Step the target angle in radians. */

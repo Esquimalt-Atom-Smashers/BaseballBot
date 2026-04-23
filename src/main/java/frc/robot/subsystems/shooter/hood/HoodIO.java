@@ -21,6 +21,9 @@ public interface HoodIO {
   /** Set the target position. */
   default void setTargetPosition(double targetRads) {}
 
+  /** Set the target set position */
+  default void setServoPosition(double targetSetPosition) {}
+
   /** Sets the encoder position to 0. */
   default void resetEncoder() {}
 
