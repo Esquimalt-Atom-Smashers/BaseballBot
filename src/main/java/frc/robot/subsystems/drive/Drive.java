@@ -575,6 +575,7 @@ public class Drive extends SubsystemBase implements Vision.VisionConsumer {
     poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
   }
 
+  /** Resets where the robot thinks it currently is by resettings its {@link:poseEstimater} */
   public void resetPosition(Pose2d pose) {
     poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
   }
