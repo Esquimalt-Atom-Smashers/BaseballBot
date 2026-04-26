@@ -4,7 +4,6 @@
 
 package frc.robot.subsystems.shooter;
 
-import static edu.wpi.first.units.Units.Degrees;
 import static edu.wpi.first.units.Units.MetersPerSecond;
 import static edu.wpi.first.units.Units.Radians;
 
@@ -78,12 +77,12 @@ public class ShooterSimVisualizer {
 
   /**
    * @param vel launch speed magnitude
-   * @param hoodAngleRad hood angle from vertical
+   * @param hoodAngleRad hood elevation from horizontal
    * @param turretYawRobotFrame turret yaw in robot frame; combined with robot heading for field-frame shot yaw
    */
   public void updateFuel(LinearVelocity vel, Angle hoodAngleRad, Angle turretYawRobotFrame) {
     Pose3d robotPose = poseSupplier.get();
-    Angle elevationAngle = Degrees.of(90).minus(hoodAngleRad);
+    Angle elevationAngle = hoodAngleRad;
     Angle shotYawFieldFrame =
         Radians.of(
             robotPose.getRotation().toRotation2d().getRadians() + turretYawRobotFrame.in(Radians));
@@ -107,9 +106,9 @@ public class ShooterSimVisualizer {
    * {@link #updateGhostFuel()} when the sphere center is at or below floor contact height or age exceeds {@link
    * #GHOST_MAX_AGE_SEC}.
    */
-  public void startGhostFuel(LinearVelocity vel, Angle hoodAngleFromVertical, Angle turretYawRobotFrame) {
+  public void startGhostFuel(LinearVelocity vel, Angle hoodElevationFromHorizontal, Angle turretYawRobotFrame) {
     Pose3d robot = poseSupplier.get();
-    Angle elevationAngle = Degrees.of(90).minus(hoodAngleFromVertical);
+    Angle elevationAngle = hoodElevationFromHorizontal;
     Angle shotYawFieldFrame =
         Radians.of(robot.getRotation().toRotation2d().getRadians() + turretYawRobotFrame.in(Radians));
     Translation3d initialVelocity = launchVel(vel, elevationAngle, shotYawFieldFrame);

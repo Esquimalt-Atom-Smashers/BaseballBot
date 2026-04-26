@@ -46,7 +46,7 @@ public final class ExtenderConstants {
   public static final double kMinRad = Units.degreesToRadians(0.0);
 
   /** Maximum angle (fully extended). */
-  public static final double kMaxRad = Units.degreesToRadians(95.0);
+  public static final double kMaxRad = Units.degreesToRadians(90.0);
 
   /** Tolerance for considering the Extender at target (measured vs target). */
   public static final double kAtTargetToleranceRad = Units.degreesToRadians(2.0);

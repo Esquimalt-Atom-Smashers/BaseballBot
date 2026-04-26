@@ -13,6 +13,12 @@ import org.littletonrobotics.junction.Logger;
 /** Hood subsystem: one motor with onboard position control. */
 public class Hood extends SubsystemBase {
 
+  private static final String kTargetPositionDegKey = "Hood/TargetPositionDeg";
+  private static final String kTargetSetPosKey = "Hood/TargetServoSetPos";
+
+  /** Minimum change on the raw servo (0–1) NT widget to count as operator input vs our publish echo. */
+  private static final double kServoSetWidgetEpsilon = 1e-3;
+
   /** Hood state: Idle, Tracking (approaching target), At_Target, or Manual. */
   public enum State {
     IDLE,
@@ -27,7 +33,12 @@ public class Hood extends SubsystemBase {
 
   private State state = State.IDLE;
   private double targetAngleRad = kDisabledAngleRad;
+  private double lastTargetAngleRad = kDisabledAngleRad;
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+
+  private BooleanSupplier useSmartDashboardSupplier = () -> false;
+  private double lastHoodTargetDashboardWriteDeg = Double.NaN;
+  private double lastHoodTargetServoSetWrite = Double.NaN;
 
   public Hood(HoodIO io) {
     this(io, "");
@@ -40,58 +51,141 @@ public class Hood extends SubsystemBase {
     SmartDashboard.putNumber("Hood/kP", kP);
     SmartDashboard.putNumber("Hood/kI", kI);
     SmartDashboard.putNumber("Hood/kD", kD);
-    SmartDashboard.putNumber("Hood/TargetPositionDeg", Units.radiansToDegrees(targetAngleRad));
+    SmartDashboard.putNumber(kTargetPositionDegKey, Units.radiansToDegrees(targetAngleRad));
+    SmartDashboard.putNumber(kTargetSetPosKey, 0.5);
   } // End Hood Constructor
 
   @Override
   public void periodic() {
     hoodIO.updateInputs(hoodInputs);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(targetAngleRad));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
 
     if (DriverStation.isDisabled()) {
       state = State.IDLE;
       hoodIO.stop();
+      lastHoodTargetDashboardWriteDeg = Double.NaN;
+      lastHoodTargetServoSetWrite = Double.NaN;
       return;
     }
 
-    state = ignoreLimitsSupplier.getAsBoolean() ? State.MANUAL : (atTarget() ? State.AT_TARGET : State.TRACKING);
+    // Manual override: SmartDashboard and/or stepPositionRad (MANUAL). Do not read NT every MANUAL cycle — that would
+    // undo steps; resume NT control when the widget differs from our last publish value.
+    if (useSmartDashboardSupplier.getAsBoolean()) {
+      double setpointDeg = Units.radiansToDegrees(getSetpointRad());
+      double deg = SmartDashboard.getNumber(kTargetPositionDegKey, setpointDeg);
+      if (state == State.MANUAL) {
+        if (!Double.isNaN(lastHoodTargetDashboardWriteDeg)
+            && Math.abs(deg - lastHoodTargetDashboardWriteDeg) > Units.radiansToDegrees(kAtTargetToleranceRad)) {
+          setTargetAngleRad(Units.degreesToRadians(deg));
+          setState(State.TRACKING);
+        } else {
+          targetAngleRad = getSetpointRad();
+        }
+      } else {
+        setTargetAngleRad(Units.degreesToRadians(deg));
+      }
+    } else {
+      targetAngleRad = getSetpointRad();
+    }
+    double publishedDeg = Units.radiansToDegrees(getSetpointRad());
+    SmartDashboard.putNumber(kTargetPositionDegKey, publishedDeg);
+    lastHoodTargetDashboardWriteDeg = publishedDeg;
 
-    // Set the Hood target position based on the current state.
-    double targetPositionRad = getSetpointRad();
-    hoodIO.setTargetPosition(targetPositionRad);
+    boolean manualDirectServo = false;
+    double manualServoSetClamped = 0.5;
+    if (useSmartDashboardSupplier.getAsBoolean() && state == State.MANUAL) {
+      double defaultServo = servoSetForDashboardRad(getSetpointRad());
+      double rawServo = SmartDashboard.getNumber(kTargetSetPosKey, defaultServo);
+      if (!Double.isNaN(lastHoodTargetServoSetWrite)
+          && Math.abs(rawServo - lastHoodTargetServoSetWrite) > kServoSetWidgetEpsilon) {
+        manualDirectServo = true;
+        manualServoSetClamped = MathUtil.clamp(rawServo, 0.0, 1.0);
+      }
+    }
+
+    if (targetAngleRad != lastTargetAngleRad && state != State.MANUAL) {
+      setState(State.TRACKING);
+    }
+    lastTargetAngleRad = targetAngleRad;
+
+    switch (state) {
+      case TRACKING:
+      case AT_TARGET:
+        if (atTarget()) {
+          setState(State.AT_TARGET);
+
+          // If the target angle is disabled and the hood angle is greater than the disabled angle, set the state to IDLE.
+          if (targetAngleRad == kDisabledAngleRad && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
+            setState(State.IDLE);
+          } else {
+            hoodIO.setTargetPosition(getSetpointRad());
+          }
+        } else {
+          setState(State.TRACKING);
+          hoodIO.setTargetPosition(getSetpointRad());
+        }
+        break;
+      case MANUAL:
+        if (manualDirectServo) {
+          hoodIO.setServoPosition(manualServoSetClamped);
+        } else {
+          hoodIO.setTargetPosition(getSetpointRad());
+        }
+        break;
+      case IDLE:
+        hoodIO.stop();
+        break;
+      default:
+        hoodIO.stop();
+        break;
+    }
+
+    double publishedServoSet = manualDirectServo ? manualServoSetClamped : servoSetForDashboardRad(getSetpointRad());
+    SmartDashboard.putNumber(kTargetSetPosKey, publishedServoSet);
+    lastHoodTargetServoSetWrite = publishedServoSet;
+
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(getSetpointRad()));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/UseSmartDashboardWhenManualOverride", useSmartDashboardSupplier.getAsBoolean());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
   } // End periodic
+
+  /** Set the Hood state. */
+  public void setState(State newState) {
+    state = newState;
+  } // End setState
 
   /** Get current state. */
   public State getState() {
     return state;
   } // End getState
 
-
   /** Get the current Hood angle. */
   public double getAngleRad() {
     return hoodInputs.positionRads;
   } // End getAngleRad
 
-  /** Get the current target angle. */
+  /** Current target elevation from horizontal (radians). */
   public double getTargetAngleRad() {
     return targetAngleRad;
   } // End getTargetAngleRad
 
-  /** Set the target angle. Clamped to min/max in periodic. */
+  /**
+   * Set target elevation (rad from horizontal). Clamped to travel limits unless {@link #setIgnoreLimitsSupplier}
+   * is true.
+   */
   public void setTargetAngleRad(double targetRad) {
-    targetAngleRad = targetRad;
+    targetAngleRad = ignoreLimitsSupplier.getAsBoolean() ? targetRad : clampTargetAngle(targetRad);
   } // End setTargetAngleRad
 
   /** Whether the Hood is at the target angle within tolerance. */
   public boolean atTarget() {
-    return Math.abs(getAngleRad() - getSetpointRad()) <= kAtTargetToleranceRad;
+    return Math.abs(getAngleRad() - targetAngleRad) <= kAtTargetToleranceRad;
   } // End atTarget
 
 
@@ -100,14 +194,30 @@ public class Hood extends SubsystemBase {
     return MathUtil.clamp(targetRad, kMinAngleRad, kMaxAngleRad);
   } // End clampTargetAngle
 
-  /** Get target angle, clamped to hood travel limits. */
+  /** Get target angle, clamped to hood travel limits after applying limits when override is off. */
   private double getSetpointRad() {
     return ignoreLimitsSupplier.getAsBoolean() ? targetAngleRad : clampTargetAngle(targetAngleRad);
   } // End getSetpointRad
 
+  /** Servo.set (0–1) from hood angle. */
+  private static double servoSetForDashboardRad(double hoodAngleRad) {
+    double u = kServoSetAt0deg + kServoSetPerHoodAngleRad * hoodAngleRad;
+    return MathUtil.clamp(u, 0.0, 1.0);
+  } // End servoSetForDashboardRad
 
   /** Set supplier for ignoring limits. */
   public void setIgnoreLimitsSupplier(BooleanSupplier supplier) {
     ignoreLimitsSupplier = supplier != null ? supplier : () -> false;
   } // End setIgnoreLimitsSupplier
+
+  /** When supplier is true, hood follows SmartDashboard / steps during operator manual override. */
+  public void setUseSmartDashboardTarget(BooleanSupplier supplier) {
+    useSmartDashboardSupplier = supplier != null ? supplier : () -> false;
+  } // End setUseSmartDashboardTarget
+
+  /** Step the target angle in radians. */
+  public void stepPositionRad(double stepPositionRad) {
+    state = State.MANUAL;
+    setTargetAngleRad(getTargetAngleRad() + stepPositionRad);
+  } // End stepPositionRad
 }

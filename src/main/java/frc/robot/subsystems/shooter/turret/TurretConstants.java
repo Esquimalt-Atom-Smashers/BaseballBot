@@ -21,7 +21,7 @@ public final class TurretConstants {
   public static final NeutralModeValue kNeutralMode = NeutralModeValue.Coast;
 
   /** Smart current limit. SPARK MAX only. */
-  public static final int kSmartCurrentLimitAmps = 25;
+  public static final int kSmartCurrentLimitAmps = 15;
 
   /** Stator current limit. Talon FX only. */
   public static final double kStatorCurrentLimitAmps = 30.0;
@@ -34,6 +34,12 @@ public final class TurretConstants {
   public static final double kI = 0.0;
   public static final double kD = 0.0;
 
+  /**
+   * SPARK arbitrary FF scale: volts per aim angular rate (rad/s). Tune on robot with {@code
+   * Turret/kAimFfVPerRadS}; start low and increase until lag drops without oscillation.
+   */
+  public static final double kAimFfVPerRadS = 0.02; // TODO: Tune, increase by 0.01 until lag drops without oscillation.
+
   /** Period for sending signals to the motor. SPARK MAX only. */
   public static final int kSignalsPeriodMs = 19;
   public static final int kEncoderVelocitySignalPeriodMs = 19;
@@ -42,16 +48,16 @@ public final class TurretConstants {
   public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.kPi;
 
   /** Minimum Turret angle. */
-  public static final double kMinAngleRad = Units.degreesToRadians(-175.0);
+  public static final double kMinAngleRad = Units.degreesToRadians(-181.0);
 
   /** Maximum Turret angle. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(190.0);
+  public static final double kMaxAngleRad = Units.degreesToRadians(181.0);
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;
 
   /** Tolerance for considering the Turret on target (setpoint vs measured, Turret frame). */
-  public static final double kAtTargetToleranceRad = Units.degreesToRadians(3.0);
+  public static final double kAtTargetToleranceRad = Units.degreesToRadians(2.0);
 
   /** 
    * Tolerance for considering the Turret on target (setpoint vs measured, Turret frame).
@@ -61,4 +67,10 @@ public final class TurretConstants {
 
   /** Delta Rad per step. */
   public static final double kStepRad = Units.degreesToRadians(5.0);
+
+  /**
+   * Sim-only cap on commanded turret angular rate (rad/s). Toy plant in {@link frc.robot.subsystems.shooter.turret.TurretIOSim};
+   * set high enough that lag is not dominated by this limit when testing spin tracking.
+   */
+  public static final double kSimMaxTurretRadPerSec = 12.0;
 }

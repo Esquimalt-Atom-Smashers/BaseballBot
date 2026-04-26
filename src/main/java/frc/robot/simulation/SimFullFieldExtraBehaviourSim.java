@@ -1375,7 +1375,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		double ballExitVelMps = exitVelMps
 				* ShooterConstants.kExitVelocityCompensationMultiplier
 				* ShooterConstants.kSimFlywheelToFuelExitVelocityEfficiency;
-		double fuelSimElevationRad = Math.PI / 2.0 - shot.getHoodAngle().in(Radians);
+		double fuelSimElevationRad = shot.getHoodAngle().in(Radians);
 		// Fixed kitbot shooter: launch direction is always out the rear in robot frame.
 		double launchYawRobotRad = kKitbotRearShooterYawOffsetRad;
 		fuelSim.launchFuel(

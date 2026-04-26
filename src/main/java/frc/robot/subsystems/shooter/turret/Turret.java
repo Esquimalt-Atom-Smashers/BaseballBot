@@ -10,6 +10,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.commands.ShooterCommands;
 import frc.robot.subsystems.drive.Drive;
+import frc.robot.subsystems.shooter.ShooterCalculator;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
@@ -67,11 +68,15 @@ public class Turret extends SubsystemBase {
       targetPositionRad = MathUtil.clamp(turretInputs.positionRads, kMinAngleRad, kMaxAngleRad);
     }
     // Enabled: Aim at the target only if aim-at-target is enabled (e.g. ShootWhenReadyCommand active); otherwise hold position.
-    // Gets robot relative omega for velocity feedforward for spin compensation (counteracts robot rotation).
+    // Velocity feedforward = d/dt(robot-frame aim to target), including pivot offset from robot center (parallax while yawing).
     else if (!manualOverrideSupplier.getAsBoolean()) {
       if (aimAtTargetSupplier.getAsBoolean()) {
         setTargetRelativeToRobot(ShooterCommands.getTurretAngleFromShot(drive));
-        setVelocityFeedforwardRadPerSec(-drive.getFieldRelativeChassisSpeeds().omegaRadiansPerSecond);
+        setVelocityFeedforwardRadPerSec(
+            ShooterCalculator.robotFramePivotToTargetAimRateRadPerSec(
+                drive.getPose(),
+                drive.getChassisSpeeds(),
+                ShooterCommands.getShooterTarget3d(drive).toTranslation2d()));
         targetPositionRad = getSetpointRad();
         state = atTarget() ? State.AT_TARGET : State.TRACKING;
       } else {
@@ -108,6 +113,7 @@ public class Turret extends SubsystemBase {
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/TargetPositionDeg", Units.radiansToDegrees(targetPositionRad));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/TargetRobotFrameDeg", getTargetRelativeToRobot().getDegrees());
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/RobotFrameDeg", getRobotFramePosition().getDegrees());
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimRateFeedforwardDegPerSec", Units.radiansToDegrees(velocityFeedforwardRadPerSec));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/State", state.name());
 
     turretIO.setTargetPosition(targetPositionRad, velocityFeedforwardRadPerSec);

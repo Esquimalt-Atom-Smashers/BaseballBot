@@ -1,4 +1,3 @@
-// Copyright (c) 2021-2026 Littleton Robotics
 // http://github.com/Mechanical-Advantage
 //
 // Use of this source code is governed by a BSD
@@ -87,7 +86,7 @@ public class RobotContainer {
 	private boolean isAgitatorEnabled = true;
 	private boolean isTransferEnabled = true;
 	private boolean isTurretEnabled 	= true;
-	private boolean isHoodEnabled 		= false;
+	private boolean isHoodEnabled 		= true;
 	private boolean isFlywheelEnabled = true;
 	private boolean isHangEnabled 		= true;
 
@@ -213,7 +212,7 @@ public class RobotContainer {
 				agitator = isAgitatorEnabled ? new Agitator(new AgitatorIOSparkMax()) : new Agitator(new AgitatorIO() {});
 				transfer = isTransferEnabled ? new Transfer(new TransferIOSparkMax()) : new Transfer(new TransferIO() {});
 				turret   = isTurretEnabled 	 ? new Turret(new TurretIOSparkMax()) 	  : new Turret(new TurretIO() {});
-				hood     = isHoodEnabled  	 ? new Hood(new HoodIOSparkMax()) 		  	: new Hood(new HoodIO() {});
+				hood     = isHoodEnabled  	 ? new Hood(new HoodIOAxon()) 		  			: new Hood(new HoodIO() {});
 				flywheel = isFlywheelEnabled ? new Flywheel(new FlywheelIOTalonFX())  : new Flywheel(new FlywheelIO() {});
 				hang 	 	 = isHangEnabled		 ? new Hang(new HangIOSparkMax())  				: new Hang(new HangIO() {});
 				shooterSim = null;
@@ -326,12 +325,13 @@ public class RobotContainer {
 				SafeRetractExtenderCommand.create(
 						shootWhenReadyCommand, flywheel, extender, turret, b -> driverTurretOverride = b);
 
-		// Subsystem Manual Override Ignore Limits Supplier
+		// Subsystem Manual Override Ignore Limits and Use SmartDashboard Supplier
 		intake.setIgnoreLimitsSupplier(() 	-> operatorManualOverride);
 		extender.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		agitator.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		transfer.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		hood.setIgnoreLimitsSupplier(() 		-> operatorManualOverride);
+		hood.setUseSmartDashboardTarget(()  -> operatorManualOverride);
 		flywheel.setIgnoreLimitsSupplier(() -> operatorManualOverride);
 		hang.setIgnoreLimitsSupplier(() 		-> operatorManualOverride);
 
@@ -619,7 +619,7 @@ public class RobotContainer {
 
 		// Agitator Manual Voltage Control
 		// Raise Agitator voltage
-		operatorController.y().and(operatorControlGate).onTrue(
+		operatorController.y().onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> agitator.stepVoltage(AgitatorConstants.kStepVolts), agitator),
 				new InstantCommand(),
@@ -629,7 +629,7 @@ public class RobotContainer {
 		// Lower Agitator voltage
 		operatorController.a().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
-				Commands.runOnce(() -> agitator.stepVoltage(-AgitatorConstants.kStepVolts), agitator),
+				Commands.runOnce(() -> agitator.stepVoltage(-AgitatorConstants.kStepVolts), hood),
 				new InstantCommand(),
 				() -> (operatorManualOverride && agitator != null)
 			)
@@ -1408,6 +1408,7 @@ public class RobotContainer {
 		secondSimRobotBundle.agitator.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.transfer.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.hood.setIgnoreLimitsSupplier(() 		 -> false);
+		secondSimRobotBundle.hood.setUseSmartDashboardTarget(()  -> false);
 		secondSimRobotBundle.flywheel.setIgnoreLimitsSupplier(() -> false);
 		secondSimRobotBundle.hang.setIgnoreLimitsSupplier(() 		 -> false);
 

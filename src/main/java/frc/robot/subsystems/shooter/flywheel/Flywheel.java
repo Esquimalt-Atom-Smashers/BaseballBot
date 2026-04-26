@@ -152,6 +152,11 @@ public class Flywheel extends SubsystemBase {
     return Math.abs(getVelocityRadPerSec() - getTargetVelocityRadPerSec()) <= kAtTargetVelocityToleranceRadPerSec;
   } // End atTargetVelocity
 
+  /** Whether Flywheel is at target velocity within double tolerance. */
+  public boolean atTargetVelocityWithinDoubleTolerance() {
+    return Math.abs(getVelocityRadPerSec() - getTargetVelocityRadPerSec()) <= 2.0 * kAtTargetVelocityToleranceRadPerSec;
+  } // End atTargetVelocityWithinDoubleTolerance
+
 
   /** Set supplier for ignoring limits. */
   public void setIgnoreLimitsSupplier(BooleanSupplier supplier) {

@@ -36,10 +36,10 @@ public final class IntakeConstants {
   public static final double kIdleVoltage = 0.0;
 
   /** Voltage in Intaking state (positive = pull in). */
-  public static final double kIntakingVoltage = 5.0;
+  public static final double kIntakingVoltage = 8.0;
 
   /** Voltage magnitude in Reversing state (negative = spit out). */
-  public static final double kReversingVoltage = -2.0;
+  public static final double kReversingVoltage = -5.0;
 
   /** Delta volts per step. */
   public static final double kStepVolts = 0.25;
