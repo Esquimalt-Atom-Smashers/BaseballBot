@@ -113,8 +113,9 @@ public class Hood extends SubsystemBase {
         if (atTarget()) {
           setState(State.AT_TARGET);
 
-          // If the target angle is disabled and the hood angle is greater than the disabled angle, set the state to IDLE.
-          if (targetAngleRad == kDisabledAngleRad && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
+          // If commanded to disabled angle and measured angle reached that region, transition to IDLE.
+          if (Math.abs(targetAngleRad - kDisabledAngleRad) <= kAtTargetToleranceRad
+              && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
             setState(State.IDLE);
           } else {
             hoodIO.setTargetPosition(getSetpointRad());
