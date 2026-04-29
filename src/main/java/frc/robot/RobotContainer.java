@@ -51,6 +51,7 @@ import frc.robot.subsystems.shooter.turret.*;
 import frc.robot.subsystems.shooter.hood.*;
 import frc.robot.subsystems.shooter.flywheel.*;
 import frc.robot.subsystems.hang.*;
+import frc.robot.subsystems.candle.*;
 
 import frc.robot.simulation.SecondSimRobotBundle;
 import frc.robot.simulation.SecondSimRobotOutputs;
@@ -88,7 +89,8 @@ public class RobotContainer {
 	private boolean isTurretEnabled 	= true;
 	private boolean isHoodEnabled 		= true;
 	private boolean isFlywheelEnabled = true;
-	private boolean isHangEnabled 		= true;
+	private boolean isHangEnabled 		= false;
+	private boolean isCandleEnabled 	= true;
 
 	// Simulation Toggle
 	private boolean halfFuelOnly 			= false;
@@ -107,6 +109,7 @@ public class RobotContainer {
 	private final Hood hood;
 	private final Flywheel flywheel;
 	private final Hang hang;
+	private final CANdle candle;
 
 	// Drive Commands
 	private final TeleopDrive teleopDrive;
@@ -216,6 +219,7 @@ public class RobotContainer {
 				hood     = isHoodEnabled  	 ? new Hood(new HoodIOAxon()) 		  			: new Hood(new HoodIO() {});
 				flywheel = isFlywheelEnabled ? new Flywheel(new FlywheelIOTalonFX())  : new Flywheel(new FlywheelIO() {});
 				hang 	 	 = isHangEnabled		 ? new Hang(new HangIOSparkMax())  				: new Hang(new HangIO() {});
+				candle 	 = isCandleEnabled   ? new CANdle(new CANdleIOLEDs())  			  : new CANdle(new CANdleIO() {});
 				shooterSim = null;
 				shooterSimVisualizer = null;
 				break;
@@ -258,6 +262,7 @@ public class RobotContainer {
 				hood 		 = new Hood(new HoodIOSim());
 				flywheel = new Flywheel(new FlywheelIOSim());
 				hang 		 = new Hang(new HangIOSim());
+				candle   = new CANdle(new CANdleIOSim());
 
 				int fuelRobotIndex = 0;
 				if (fuelSimEnabled) {
@@ -311,6 +316,7 @@ public class RobotContainer {
 				hood 		 = new Hood(new HoodIO() {});
 				flywheel = new Flywheel(new FlywheelIO() {});
 				hang 		 = new Hang(new HangIO() {});
+				candle   = new CANdle(new CANdleIO() {});
 				shooterSim = null;
 				shooterSimVisualizer = null;
 				break;
@@ -357,6 +363,11 @@ public class RobotContainer {
 		turret.setDrive(drive);
 		turret.setAimAtTargetSupplier(() -> shootWhenReadyCommand.isScheduled());
 
+		// LED Subsystem
+		candle.setShootWhenReadySupplier(() -> shootWhenReadyCommand.isScheduled());
+		candle.setManualOverrideSupplier(() -> RobotContainer.driverManualOverride || RobotContainer.operatorManualOverride);
+		candle.setShooter(shooter);
+
 		/// -------------------------------------------------------------------------------------------
 		/// ------------------------------------ Logger Dashboard -------------------------------------
 		/// -------------------------------------------------------------------------------------------
@@ -391,8 +402,9 @@ public class RobotContainer {
 					new Pose3d(-0.095, -0.17, 0.31, new Rotation3d(0, 0, 0)), // model_0 Turret
 					new Pose3d(0.275, 0, 0.195, new Rotation3d(0, 0, 0)),  // model_1 Extender
 					new Pose3d(-0.29635, 0.055, 0.215, new Rotation3d(0, 0, 0))   // model_2 Hang
-				});
-			
+				}
+		);
+		
 
     // Configure button bindings
     configureDriverBindings();
