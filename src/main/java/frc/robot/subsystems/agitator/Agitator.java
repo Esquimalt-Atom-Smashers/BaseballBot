@@ -59,11 +59,16 @@ public class Agitator extends SubsystemBase {
     }
 
     boolean useSmartDashboardTarget = ignoreLimitsSupplier.getAsBoolean();
-    if (useSmartDashboardTarget && state != State.IDLE) {
+    if (useSmartDashboardTarget) {
       double dashboardVolts = SmartDashboard.getNumber(kTargetVoltageKey, targetVoltage);
-      if (!Double.isNaN(lastTargetVoltageDashboardWrite)
-          && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon) {
+      boolean dashboardTargetEdited =
+          !Double.isNaN(lastTargetVoltageDashboardWrite)
+              && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon;
+      if (dashboardTargetEdited) {
         setTargetVoltage(dashboardVolts);
+        if (state == State.IDLE) {
+          state = State.MANUAL;
+        }
       }
     }
     targetVoltage = TelemetryUtil.roundToTwoDecimals(targetVoltage);

@@ -59,12 +59,14 @@ public class Intake extends SubsystemBase {
       return;
     }
 
-    if (state != State.IDLE) {
-      double dashboardVolts = SmartDashboard.getNumber(kTargetVoltageKey, targetVoltage);
-      // Apply dashboard only when operator actually edits the widget value.
-      if (!Double.isNaN(lastTargetVoltageDashboardWrite)
-          && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon) {
-        setTargetVoltage(dashboardVolts);
+    double dashboardVolts = SmartDashboard.getNumber(kTargetVoltageKey, targetVoltage);
+    boolean dashboardTargetEdited =
+        !Double.isNaN(lastTargetVoltageDashboardWrite)
+            && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon;
+    if (dashboardTargetEdited) {
+      setTargetVoltage(dashboardVolts);
+      if (state == State.IDLE) {
+        state = State.MANUAL;
       }
     }
     targetVoltage = TelemetryUtil.roundToTwoDecimals(targetVoltage);

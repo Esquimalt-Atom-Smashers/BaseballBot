@@ -13,6 +13,8 @@ import org.littletonrobotics.junction.Logger;
 
 /** Hang subsystem: one motor with onboard position control. */
 public class Hang extends SubsystemBase {
+  private static final String kTargetPositionInchesKey = "Hang/TargetPositionInches";
+  private static final double kTargetPositionWidgetEpsilonInches = 1e-3;
 
   /** Hang state: Idle, Stored, Hanging, Level_1, or Manual. */
   public enum State {
@@ -31,6 +33,7 @@ public class Hang extends SubsystemBase {
   private double targetPositionMeters =
       Units.inchesToMeters(TelemetryUtil.roundToTwoDecimals(Units.metersToInches(kStoredPositionMeters)));
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+  private double lastTargetPositionDashboardWriteInches = Double.NaN;
 
   public Hang(HangIO io) {
     this(io, "");
@@ -43,7 +46,7 @@ public class Hang extends SubsystemBase {
     SmartDashboard.putNumber("Hang/kP", kP);
     SmartDashboard.putNumber("Hang/kI", kI);
     SmartDashboard.putNumber("Hang/kD", kD);
-    SmartDashboard.putNumber("Hang/TargetPositionInches", TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
+    SmartDashboard.putNumber(kTargetPositionInchesKey, TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
   } // End Hang Constructor
 
   @Override
@@ -60,8 +63,23 @@ public class Hang extends SubsystemBase {
 
     if (DriverStation.isDisabled()) {
       hangIO.stop();
+      lastTargetPositionDashboardWriteInches = Double.NaN;
       return;
     }
+
+    double targetInches = SmartDashboard.getNumber(kTargetPositionInchesKey,
+        TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
+    boolean dashboardTargetEdited = !Double.isNaN(lastTargetPositionDashboardWriteInches)
+        && Math.abs(targetInches - lastTargetPositionDashboardWriteInches) > kTargetPositionWidgetEpsilonInches;
+    if (dashboardTargetEdited) {
+      setTargetPositionMeters(Units.inchesToMeters(targetInches));
+      if (state == State.IDLE) {
+        state = State.MANUAL;
+      }
+    }
+    double publishedTargetInches = TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters));
+    SmartDashboard.putNumber(kTargetPositionInchesKey, publishedTargetInches);
+    lastTargetPositionDashboardWriteInches = publishedTargetInches;
 
     // Update the target position.
     targetPositionMeters = getSetpointMeters();

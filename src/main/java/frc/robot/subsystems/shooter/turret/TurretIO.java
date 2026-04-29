@@ -28,6 +28,15 @@ public interface TurretIO {
     setTargetPosition(targetRads);
   }
 
+  /**
+   * Set target position with velocity feedforward and precomputed arbitrary feedforward volts.
+   * Default ignores velocity and FF volts.
+   */
+  default void setTargetPosition(
+      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
+    setTargetPosition(targetRads, velocityFeedforwardRadPerSec);
+  }
+
   /** Sets the encoder position to 0. */
   default void resetEncoder() {}
 

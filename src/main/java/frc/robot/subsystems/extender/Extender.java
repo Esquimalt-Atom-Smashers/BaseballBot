@@ -13,6 +13,8 @@ import org.littletonrobotics.junction.Logger;
 
 /** Extender subsystem: one motor with onboard position control. */
 public class Extender extends SubsystemBase {
+  private static final String kTargetPositionDegKey = "Extender/TargetPositionDeg";
+  private static final double kTargetPositionWidgetEpsilonDeg = 1e-3;
 
   /** Extender state: Idle, Retracted (facing up), Partial, Extended (facing forward) or Manual. */
   public enum State {
@@ -31,6 +33,7 @@ public class Extender extends SubsystemBase {
   private double targetPositionRad =
       Units.degreesToRadians(TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(kUpExtenderRad)));
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+  private double lastTargetPositionDashboardWriteDeg = Double.NaN;
 
   public Extender(ExtenderIO io) {
     this(io, "");
@@ -43,7 +46,7 @@ public class Extender extends SubsystemBase {
     SmartDashboard.putNumber("Extender/kP", kP);
     SmartDashboard.putNumber("Extender/kI", kI);
     SmartDashboard.putNumber("Extender/kD", kD);
-    SmartDashboard.putNumber("Extender/TargetPositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetPositionRad)));
+    SmartDashboard.putNumber(kTargetPositionDegKey, TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetPositionRad)));
   } // End Extender Constructor
 
   @Override
@@ -60,8 +63,23 @@ public class Extender extends SubsystemBase {
 
     if (DriverStation.isDisabled()) {
       extenderIO.stop();
+      lastTargetPositionDashboardWriteDeg = Double.NaN;
       return;
     }
+
+    double targetDeg = SmartDashboard.getNumber(kTargetPositionDegKey,
+        TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetPositionRad)));
+    boolean dashboardTargetEdited = !Double.isNaN(lastTargetPositionDashboardWriteDeg)
+        && Math.abs(targetDeg - lastTargetPositionDashboardWriteDeg) > kTargetPositionWidgetEpsilonDeg;
+    if (dashboardTargetEdited) {
+      setTargetPositionRad(Units.degreesToRadians(targetDeg));
+      if (state == State.IDLE) {
+        state = State.MANUAL;
+      }
+    }
+    double publishedTargetDeg = TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetPositionRad));
+    SmartDashboard.putNumber(kTargetPositionDegKey, publishedTargetDeg);
+    lastTargetPositionDashboardWriteDeg = publishedTargetDeg;
 
     // Update the target position.
     targetPositionRad = getSetpointRad();

@@ -39,7 +39,8 @@ public class Turret extends SubsystemBase {
   private Rotation2d targetRelativeToRobot = kDefaultAimDirectionRobotFrame; // Target in robot frame (0 = forward).
   private double lastTargetPositionRad = 0.0; // Last position setpoint sent to IO.
   private double velocityFeedforwardRadPerSec = 0.0;
-  private double lastSmartDashboardTargetPosRad = kDefaultAimDirectionRobotFrame.getRadians();
+  private double aimFfVoltsPerRadPerSec = kAimFfVPerRadS;
+  private double lastSmartDashboardTargetPosRad = 0.0;
   private boolean lastManualOverride = false;
 
   public Turret(TurretIO io) {
@@ -53,12 +54,16 @@ public class Turret extends SubsystemBase {
     SmartDashboard.putNumber("Turret/kP", kP);
     SmartDashboard.putNumber("Turret/kI", kI);
     SmartDashboard.putNumber("Turret/kD", kD);
-    SmartDashboard.putNumber("Turret/TargetPositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(kDefaultAimDirectionRobotFrame.getRadians())));
+    SmartDashboard.putNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
+    SmartDashboard.putNumber("Turret/TargetPositionDeg",
+        TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(robotToTurretFrameRad(kDefaultAimDirectionRobotFrame.getRadians()))));
+    SmartDashboard.putNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
   } // End Turret Constructor
 
   @Override
   public void periodic() {
     turretIO.updateInputs(turretInputs);
+    aimFfVoltsPerRadPerSec = SmartDashboard.getNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
 
     double targetPositionRad;
 
@@ -88,23 +93,26 @@ public class Turret extends SubsystemBase {
     }
     // Manual Override: Manually overriding the Turret position.
     else {
-      double targetRobotFrameRad = Units.degreesToRadians(SmartDashboard.getNumber("Turret/TargetPositionDeg", 
-          Units.radiansToDegrees(kDefaultAimDirectionRobotFrame.getRadians())));
+      double targetTurretFrameRad = Units.degreesToRadians(
+          SmartDashboard.getNumber("Turret/TargetPositionDeg", Units.radiansToDegrees(lastTargetPositionRad)));
       boolean manualRisingEdge = !lastManualOverride;
       if (manualRisingEdge) {
         setTargetRelativeToRobot(Rotation2d.fromRadians(getRobotFramePosition().getRadians()));
-      } else if (targetRobotFrameRad != lastSmartDashboardTargetPosRad) {
-        setTargetRelativeToRobot(Rotation2d.fromRadians(targetRobotFrameRad));
+        lastSmartDashboardTargetPosRad = lastTargetPositionRad;
+      } else if (targetTurretFrameRad != lastSmartDashboardTargetPosRad) {
+        setTargetRelativeToRobot(Rotation2d.fromRadians(turretToRobotFrameRad(targetTurretFrameRad)));
       }
       state = State.MANUAL;
 
-      lastSmartDashboardTargetPosRad = targetRobotFrameRad;
+      lastSmartDashboardTargetPosRad = targetTurretFrameRad;
       velocityFeedforwardRadPerSec = 0.0;
       targetPositionRad = getSetpointRad();
     }
 
     lastTargetPositionRad = targetPositionRad;
     lastManualOverride = manualOverrideSupplier.getAsBoolean();
+
+    double arbitraryFeedforwardVolts = MathUtil.clamp(velocityFeedforwardRadPerSec * aimFfVoltsPerRadPerSec, -kMaxVoltage, kMaxVoltage);
 
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/Inputs/MotorConnected", turretInputs.motorConnected);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/Inputs/PositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(turretInputs.positionRads)));
@@ -115,9 +123,11 @@ public class Turret extends SubsystemBase {
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/TargetRobotFrameDeg", TelemetryUtil.roundToTwoDecimals(getTargetRelativeToRobot().getDegrees()));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/RobotFrameDeg", TelemetryUtil.roundToTwoDecimals(getRobotFramePosition().getDegrees()));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimRateFeedforwardDegPerSec", Units.radiansToDegrees(velocityFeedforwardRadPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimFfVPerRadS", aimFfVoltsPerRadPerSec);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimFfVolts", arbitraryFeedforwardVolts);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/State", state.name());
 
-    turretIO.setTargetPosition(targetPositionRad, velocityFeedforwardRadPerSec);
+    turretIO.setTargetPosition(targetPositionRad, velocityFeedforwardRadPerSec, arbitraryFeedforwardVolts);
   } // End periodic
 
   /** Get current state. */
@@ -276,7 +286,8 @@ public class Turret extends SubsystemBase {
     turretIO.resetEncoder();
     setTargetRelativeToRobot(kDefaultAimDirectionRobotFrame);
     lastTargetPositionRad = robotToTurretFrameRad(kDefaultAimDirectionRobotFrame.getRadians());
-    SmartDashboard.putNumber("Turret/TargetPositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(kDefaultAimDirectionRobotFrame.getRadians())));
+    SmartDashboard.putNumber("Turret/TargetPositionDeg", TelemetryUtil.roundToTwoDecimals(
+        Units.radiansToDegrees(robotToTurretFrameRad(kDefaultAimDirectionRobotFrame.getRadians()))));
   } // End resetMotorEncoder
 
   /** Step the target position in Turret frame. */

@@ -13,7 +13,6 @@ import com.revrobotics.spark.SparkLowLevel;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.SparkMaxConfig;
 
-import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -49,7 +48,6 @@ public class TurretIOSparkMax implements TurretIO {
         .primaryEncoderVelocityPeriodMs(kEncoderVelocitySignalPeriodMs);
     motor.configure(sparkMaxConfig, ResetMode.kNoResetSafeParameters, PersistMode.kNoPersistParameters);
     motor.setPeriodicFrameTimeout(0);
-    SmartDashboard.putNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
   } // End TurretIOSparkMax Constructor
 
   @Override
@@ -89,10 +87,18 @@ public class TurretIOSparkMax implements TurretIO {
 
   @Override
   public void setTargetPosition(double targetRads, double velocityFeedforwardRadPerSec) {
+    setTargetPosition(targetRads, velocityFeedforwardRadPerSec, 0.0);
+  } // End setTargetPosition
+
+  @Override
+  public void setTargetPosition(
+      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
     double targetRot = Units.radiansToRotations(targetRads);
-    double kFf = SmartDashboard.getNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
-    double arbFfVolts = MathUtil.clamp(velocityFeedforwardRadPerSec * kFf, -kMaxVoltage, kMaxVoltage);
-    closedLoopController.setSetpoint(targetRot, SparkBase.ControlType.kPosition, ClosedLoopSlot.kSlot0, arbFfVolts);
+    closedLoopController.setSetpoint(
+        targetRot,
+        SparkBase.ControlType.kPosition,
+        ClosedLoopSlot.kSlot0,
+        arbitraryFeedforwardVolts);
   } // End setTargetPosition
   
   @Override
