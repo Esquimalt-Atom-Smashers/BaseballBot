@@ -568,8 +568,8 @@ public class RobotContainer {
 		// Operator Control Gate
 		Trigger operatorControlGate = new Trigger(this::isOperatorControlsEnabled);
 
-		// Intake Manual Voltage Control
-		// Raise Intake voltage
+		// Hood Manual Position Control
+		// Raise Hood Position
 		operatorController.povLeft().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> hood.stepPositionRad(HoodConstants.kStepAngleRads), hood),
@@ -577,7 +577,7 @@ public class RobotContainer {
 				() -> hood != null
 			)
 		);
-		// Lower Intake voltage
+		// Lower Hood Position
 		operatorController.povRight().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> hood.stepPositionRad(-HoodConstants.kStepAngleRads), hood),
@@ -606,10 +606,11 @@ public class RobotContainer {
 				() -> extender != null)
 		);
 
+		// Idle all subsystems
 		operatorController.a().and(operatorControlGate).onTrue(
-			Commands.runOnce(() -> {
+			new InstantCommand(() -> {
 				idleAllSubsystems();
-			}, turret)
+			})
 		);
 
 		// Hang Manual Position Control
@@ -643,6 +644,7 @@ public class RobotContainer {
 		Pose2d rightResetODOMPose = new Pose2d(Constants.Dimensions.FULL_LENGTH.in(Meters) / 2, Constants.Dimensions.FULL_WIDTH.in(Meters) / 2, new Rotation2d(0));
 		Pose2d leftResetODOMPose = new Pose2d(FieldConstants.FIELD_WIDTH_M - (Constants.Dimensions.FULL_LENGTH.in(Meters) / 2), Constants.Dimensions.FULL_WIDTH.in(Meters) / 2, new Rotation2d(0));
 
+		// Right position reset ODOM
 		operatorController.leftBumper().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> drive.resetPosition(rightResetODOMPose)),
@@ -651,6 +653,7 @@ public class RobotContainer {
 			)
 		);
 
+		// Left position reset ODOM
 		operatorController.leftBumper().and(operatorControlGate).onTrue(
 			new ConditionalCommand(
 				Commands.runOnce(() -> drive.resetPosition(leftResetODOMPose)),
