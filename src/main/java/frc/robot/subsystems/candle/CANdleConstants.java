@@ -5,7 +5,7 @@ import com.ctre.phoenix6.signals.RGBWColor;
 /** Constants for the CANdle subsystem */
 public class CANdleConstants {
   /** The device id of the CANdle for controlling the LEDs */
-  public static final int kDeviceID = 26;
+  public static final int kDeviceID = 60;
 
   /** LED start index to apply color to */
   public static final int kFirstLED = 0;
