@@ -32,7 +32,6 @@ import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants;
 import frc.robot.FieldConstants;
 import frc.robot.commands.DriveCommands;
@@ -292,8 +291,9 @@ public final class SimFullFieldExtraBehaviourSim {
 	private int behaviorTickCounter = 0;
 	private Pose2d latestPrimaryPose;
 	private Pose2d latestSecondSimPose;
-	private final Map<Integer, CommandXboxController> humanControllerByRole = new HashMap<>();
+	private final Map<Integer, HumanControlGamepad> humanGamepadByRole = new HashMap<>();
 	private final Map<Integer, Integer> humanControllerPortByRole = new HashMap<>();
+	private final Map<Integer, Boolean> humanControllerDirectInputByRole = new HashMap<>();
 	private final Map<Integer, Boolean> humanPrevRightBumperByRole = new HashMap<>();
 	private final Map<Integer, ProfiledPIDController> humanFaceTargetControllerByRole = new HashMap<>();
 
@@ -517,7 +517,7 @@ public final class SimFullFieldExtraBehaviourSim {
 			FuelSim fuelSim,
 			boolean fuelSimEnabled,
 			boolean secondSimEnabled) {
-		CommandXboxController controller = humanControllerForRole(role, secondSimEnabled);
+		HumanControlGamepad controller = humanControllerForRole(role, secondSimEnabled);
 		if (controller == null) {
 			extraRobot.drive.stop();
 			return;
@@ -540,7 +540,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		double velocityY = DriveCommands.scaleAxisWithTurbo(linearVelocity.getX(), turboInput, maxLinearSpeed);  // Left/right joystick → field Y
 
 		// Determine rotational rate: use face-target PID if enabled, otherwise use joystick
-		boolean faceAndShoot = controller.getHID().getAButton();
+		boolean faceAndShoot = controller.getAButton();
 		double rotationalRate;
 		if (faceAndShoot) {
 			autoSelectShootingTargetForExtra(extraRobot, roleIsRedAlliance(role));
@@ -563,7 +563,7 @@ public final class SimFullFieldExtraBehaviourSim {
 		driveFieldRelativeForAlliance(extraRobot.drive, velocityX, velocityY, rotationalRate, roleIsRedAlliance(role));
 	} // End runHumanControlSim
 
-	private CommandXboxController humanControllerForRole(int role, boolean secondSimEnabled) {
+	private HumanControlGamepad humanControllerForRole(int role, boolean secondSimEnabled) {
 		Integer port = switch (role) {
 			case SimStartingPoseFullFieldSim.ROLE_BLUE_2 -> kHumanControllerPortBlue2;
 			case SimStartingPoseFullFieldSim.ROLE_BLUE_3 -> kHumanControllerPortBlue3;
@@ -576,13 +576,16 @@ public final class SimFullFieldExtraBehaviourSim {
 			return null;
 		}
 		Integer cachedPort = humanControllerPortByRole.get(role);
-		if (cachedPort == null || cachedPort != port) {
-			CommandXboxController controller = new CommandXboxController(port);
-			humanControllerByRole.put(role, controller);
+		Boolean cachedDirect = humanControllerDirectInputByRole.get(role);
+		boolean wantDirect = HumanControlGamepad.usesDirectInputForFullFieldRole(role);
+		if (cachedPort == null || cachedPort != port || cachedDirect == null || cachedDirect != wantDirect) {
+			HumanControlGamepad gamepad = HumanControlGamepad.forFullFieldExtraRole(port, role);
+			humanGamepadByRole.put(role, gamepad);
 			humanControllerPortByRole.put(role, port);
-			return controller;
+			humanControllerDirectInputByRole.put(role, wantDirect);
+			return gamepad;
 		}
-		return humanControllerByRole.get(role);
+		return humanGamepadByRole.get(role);
 	} // End humanControllerForRole
 
 	private ProfiledPIDController faceTargetControllerForRole(int role) {
@@ -964,6 +967,8 @@ public final class SimFullFieldExtraBehaviourSim {
 		state.twoPathCyclePhase = null;
 		humanPrevRightBumperByRole.remove(role);
 		humanControllerPortByRole.remove(role);
+		humanControllerDirectInputByRole.remove(role);
+		humanGamepadByRole.remove(role);
 	} // End clearTransientExtraMotionCaches
 
 	/** Drops cached plan output on {@code cache}; keeps pathfinder so AD* can resume warm. */

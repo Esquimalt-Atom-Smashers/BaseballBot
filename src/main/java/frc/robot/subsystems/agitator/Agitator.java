@@ -4,13 +4,17 @@ import static frc.robot.subsystems.agitator.AgitatorConstants.*;
 
 import edu.wpi.first.math.MathUtil;
 import frc.robot.Constants;
+import frc.robot.util.TelemetryUtil;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
 /** Agitator subsystem: storage-to-shooter transfer. */
 public class Agitator extends SubsystemBase {
+  private static final String kTargetVoltageKey = "Agitator/TargetVoltage";
+  private static final double kTargetVoltageWidgetEpsilon = 1e-3;
 
   /** Agitator state: Idle, Staging (slow pre-load), Shooting, or Manual. */
   public enum State {
@@ -25,8 +29,9 @@ public class Agitator extends SubsystemBase {
   private final String logRoot;
 
   private State state = State.IDLE;
-  private double targetVoltage = kIdleVoltage;
+  private double targetVoltage = TelemetryUtil.roundToTwoDecimals(kIdleVoltage);
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+  private double lastTargetVoltageDashboardWrite = Double.NaN;
 
   public Agitator(AgitatorIO io) {
     this(io, "");
@@ -35,21 +40,40 @@ public class Agitator extends SubsystemBase {
   public Agitator(AgitatorIO io, String logRoot) {
     agitatorIO = io;
     this.logRoot = logRoot;
+    SmartDashboard.putNumber(kTargetVoltageKey, TelemetryUtil.roundToTwoDecimals(targetVoltage));
   } // End Agitator Constructor
 
   @Override
   public void periodic() {
     agitatorIO.updateInputs(agitatorInputs);
     Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/MotorConnected", agitatorInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/AppliedVolts", agitatorInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/SupplyCurrentAmps", agitatorInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Agitator/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/AppliedVolts", TelemetryUtil.roundToTwoDecimals(agitatorInputs.appliedVolts));
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/Inputs/SupplyCurrentAmps", TelemetryUtil.roundToTwoDecimals(agitatorInputs.supplyCurrentAmps));
+    Logger.recordOutput(logRoot + "Subsystems/Agitator/TargetVolts", TelemetryUtil.roundToTwoDecimals(getTargetVoltage()));
     Logger.recordOutput(logRoot + "Subsystems/Agitator/State", state.name());
 
     if (DriverStation.isDisabled()) {
       agitatorIO.stop();
+      lastTargetVoltageDashboardWrite = Double.NaN;
       return;
     }
+
+    boolean useSmartDashboardTarget = ignoreLimitsSupplier.getAsBoolean();
+    if (useSmartDashboardTarget) {
+      double dashboardVolts = SmartDashboard.getNumber(kTargetVoltageKey, targetVoltage);
+      boolean dashboardTargetEdited =
+          !Double.isNaN(lastTargetVoltageDashboardWrite)
+              && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon;
+      if (dashboardTargetEdited) {
+        setTargetVoltage(dashboardVolts);
+        if (state == State.IDLE) {
+          state = State.MANUAL;
+        }
+      }
+    }
+    targetVoltage = TelemetryUtil.roundToTwoDecimals(targetVoltage);
+    SmartDashboard.putNumber(kTargetVoltageKey, targetVoltage);
+    lastTargetVoltageDashboardWrite = targetVoltage;
 
     // Set the Agitator voltage based on the current state.
     switch (state) {
@@ -70,19 +94,19 @@ public class Agitator extends SubsystemBase {
   /** Set state to Idle (motor stopped). */
   public void setIdleState() {
     state = State.IDLE;
-    targetVoltage = kIdleVoltage;
+    setTargetVoltage(kIdleVoltage);
   } // End setIdleState
 
   /** Set state to Staging (slow pre-load). */
   public void setStagingState() {
     state = State.STAGING;
-    targetVoltage = kStagingVoltage;
+    setTargetVoltage(kStagingVoltage);
   } // End setStagingState
 
   /** Set state to Shooting (fast loading). */
   public void setShootingState() {
     state = State.SHOOTING;
-    targetVoltage = kShootingVoltage;
+    setTargetVoltage(kShootingVoltage);
   } // End setShootingState
 
   /** Get current state. */
@@ -90,9 +114,9 @@ public class Agitator extends SubsystemBase {
     return state;
   } // End getState
 
-  /** Set the target voltage. */
+  /** Set the target voltage (rounded to two decimals). */
   public void setTargetVoltage(double volts) {
-    targetVoltage = volts;
+    targetVoltage = TelemetryUtil.roundToTwoDecimals(volts);
   } // End setTargetVoltage
 
   /** Get the current target voltage. */
@@ -122,6 +146,8 @@ public class Agitator extends SubsystemBase {
         ? MathUtil.clamp(stepTargetVoltage, -Constants.kNominalVoltage, Constants.kNominalVoltage)
         : MathUtil.clamp(stepTargetVoltage, -kMaxVoltage, kMaxVoltage));
     }
-    if (getTargetVoltage() == kIdleVoltage) setIdleState();
+    if (Math.abs(getTargetVoltage() - kIdleVoltage) < 1e-6) {
+      setIdleState();
+    }
   } // End stepVoltage
 }

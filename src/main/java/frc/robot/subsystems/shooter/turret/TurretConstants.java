@@ -48,10 +48,10 @@ public final class TurretConstants {
   public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.kPi;
 
   /** Minimum Turret angle. */
-  public static final double kMinAngleRad = Units.degreesToRadians(-175.0);
+  public static final double kMinAngleRad = Units.degreesToRadians(-181.0);
 
   /** Maximum Turret angle. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(190.0);
+  public static final double kMaxAngleRad = Units.degreesToRadians(181.0);
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;

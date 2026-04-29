@@ -38,6 +38,11 @@ For any other issues, please don't hesitate to [Contact Us](https://www.esquimal
 # Simulator
 This project uses Simulator heavily to encourage additional Driver Practice without a robot, as well as testing and developing programs without the Real Robot.
 
+More details to come, but TLDR:
+Our simulation allows us to accurately simulate what our robot does and how it behaves in a match, including indepth fuel Physics, such as getting stuck on fuel on walls. We can enable up to 6 robots on the field, each with their own automated dynamic behaviour type, or they can be human controlled instead.
+
+We will update the README soon with more details.
+
 The Robot and Field interact using [maple-sim](https://github.com/Shenzhen-Robotics-Alliance/Maple-Sim), a 2D dyn4j Physics engine to simulate 2D forces and collisions, allowing testing realistic driving and interactions.
 
 The Fuel interacts with both using a [custom Simulation](https://github.com/hammerheads5000/FuelSim) (similar to a 3D Physics engine) to simulate forces such as gravity, air-resistance, etc. You can reset the fuel to its original position by clicking the `Reset Fuel` button in the **"Shooting Test"** tab in elastic. Alternatively, it could be better to do the second fix in the **"Common Errors"** section above.
@@ -76,19 +81,21 @@ The Intake is responsible for collecting the Fuel off the Field.
 
 It is one motor (SparkMax Neo550) using Voltage Control.
 
-It has three states: IDLE, INTAKING, REVERSING.
+It has four states: IDLE, INTAKING, REVERSING, MANUAL.
 
-## Extender (Not yet Implemented)
+## Extender
 The Extender is responsible for deploying/retracting the Intake.
 
-Details to be added.
+It is one motor (Sparkmax Neo550) using Positional Control.
+
+It has five states: IDLE, RETRACTED, PARTIAL, EXTENDED, MANUAL.
 
 ## Agitator
 The Agitator is responsible for moving Fuel from the Storage area into the Shooter Transfer.
 
 It is one motor (SparkMax Neo550) using Voltage Control.
 
-It has three states: IDLE, STAGING, SHOOTING.
+It has four states: IDLE, STAGING, SHOOTING, MANUAL.
 
 ## Shooter Subsystem
 The Shooter Subsystem houses the Transfer, Turret, Hood, and Flywheel Subsystems. It also houses the "Shooter Managers".
@@ -100,23 +107,25 @@ The Transfer is responsible for moving Fuel from the Agitator through the Shoote
 
 It is a one motor (SparkMax Brushed) using Voltage Control.
 
-It has three states: IDLE, STAGING, SHOOTING.
+It has four states: IDLE, STAGING, SHOOTING, MANUAL.
 
 ### <u>Turret</u>
 The Turret is responsible for rotating the Shooter so that it is aimed at the correct target.
 
 It is a one motor (Sparkmax Neo550) using Positional Control.
 
-It will need to be modified to add states. It should have two states: APPROACHING, AT_TARGET.
+It has four states: IDLE, TRACKING, AT_TARGET, MANUAL.
 
 ### <u>Hood</u>
 The Hood is responsible for changing the Fuel exit angle so that it will reach the correct target.
 
-It is not yet implemented, and is currently not being used.
+It is a Axon Max Servo using Positional control - 0 and 90 deg measured in setPosition, and then linear interpolation used to find the set value to go to angles in between.
+
+It has four states: IDLE, TRACKING, AT_TARGET, MANUAL.
 
 ### <u>Flywheel</u>
 The Flywheel is responsible for ensuring the Flywheel reaches the correct Velocity to shoot the Fuel.
 
 It is a one motor (TalonFX) using Velocity Control.
 
-It has three states: IDLE, CHARGING, AT_SPEED.
+It has four states: IDLE, CHARGING, AT_SPEED, MANUAL.

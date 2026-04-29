@@ -7,11 +7,14 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.util.TelemetryUtil;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
 /** Hang subsystem: one motor with onboard position control. */
 public class Hang extends SubsystemBase {
+  private static final String kTargetPositionInchesKey = "Hang/TargetPositionInches";
+  private static final double kTargetPositionWidgetEpsilonInches = 1e-3;
 
   /** Hang state: Idle, Stored, Hanging, Level_1, or Manual. */
   public enum State {
@@ -27,8 +30,10 @@ public class Hang extends SubsystemBase {
   private final String logRoot;
 
   private State state = State.IDLE;
-  private double targetPositionMeters = kStoredPositionMeters;
+  private double targetPositionMeters =
+      Units.inchesToMeters(TelemetryUtil.roundToTwoDecimals(Units.metersToInches(kStoredPositionMeters)));
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+  private double lastTargetPositionDashboardWriteInches = Double.NaN;
 
   public Hang(HangIO io) {
     this(io, "");
@@ -41,25 +46,40 @@ public class Hang extends SubsystemBase {
     SmartDashboard.putNumber("Hang/kP", kP);
     SmartDashboard.putNumber("Hang/kI", kI);
     SmartDashboard.putNumber("Hang/kD", kD);
-    SmartDashboard.putNumber("Hang/TargetPositionInches", Units.metersToInches(targetPositionMeters));
+    SmartDashboard.putNumber(kTargetPositionInchesKey, TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
   } // End Hang Constructor
 
   @Override
   public void periodic() {
     hangIO.updateInputs(hangInputs);
     Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/MotorConnected", hangInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/PositionInches", Units.metersToInches(hangInputs.positionMeters));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/PositionInches", TelemetryUtil.roundToTwoDecimals(Units.metersToInches(hangInputs.positionMeters)));
     Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/VelocityInchesPerSec", Units.metersToInches(hangInputs.velocityMetersPerSec));
-    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/AppliedVolts", hangInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/SupplyCurrentAmps", hangInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Hang/TargetPositionInches", Units.metersToInches(targetPositionMeters));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/AppliedVolts", TelemetryUtil.roundToTwoDecimals(hangInputs.appliedVolts));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/Inputs/SupplyCurrentAmps", TelemetryUtil.roundToTwoDecimals(hangInputs.supplyCurrentAmps));
+    Logger.recordOutput(logRoot + "Subsystems/Hang/TargetPositionInches", TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
     Logger.recordOutput(logRoot + "Subsystems/Hang/AtTargetPosition", atTargetPosition());
     Logger.recordOutput(logRoot + "Subsystems/Hang/State", state.name());
 
     if (DriverStation.isDisabled()) {
       hangIO.stop();
+      lastTargetPositionDashboardWriteInches = Double.NaN;
       return;
     }
+
+    double targetInches = SmartDashboard.getNumber(kTargetPositionInchesKey,
+        TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters)));
+    boolean dashboardTargetEdited = !Double.isNaN(lastTargetPositionDashboardWriteInches)
+        && Math.abs(targetInches - lastTargetPositionDashboardWriteInches) > kTargetPositionWidgetEpsilonInches;
+    if (dashboardTargetEdited) {
+      setTargetPositionMeters(Units.inchesToMeters(targetInches));
+      if (state == State.IDLE) {
+        state = State.MANUAL;
+      }
+    }
+    double publishedTargetInches = TelemetryUtil.roundToTwoDecimals(Units.metersToInches(targetPositionMeters));
+    SmartDashboard.putNumber(kTargetPositionInchesKey, publishedTargetInches);
+    lastTargetPositionDashboardWriteInches = publishedTargetInches;
 
     // Update the target position.
     targetPositionMeters = getSetpointMeters();
@@ -117,7 +137,8 @@ public class Hang extends SubsystemBase {
   
   /** Set target position in meters (clamped to travel limits). */
   public void setTargetPositionMeters(double targetMeters) {
-    targetPositionMeters = ignoreLimitsSupplier.getAsBoolean() ? targetMeters : clampTargetPosition(targetMeters);
+    double clampedMeters = ignoreLimitsSupplier.getAsBoolean() ? targetMeters : clampTargetPosition(targetMeters);
+    targetPositionMeters = Units.inchesToMeters(TelemetryUtil.roundToTwoDecimals(Units.metersToInches(clampedMeters)));
   } // End setTargetPositionMeters
 
   /** Measured position in meters. */

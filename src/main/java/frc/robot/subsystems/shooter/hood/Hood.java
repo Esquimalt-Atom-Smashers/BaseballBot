@@ -7,6 +7,7 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.util.TelemetryUtil;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
@@ -51,7 +52,7 @@ public class Hood extends SubsystemBase {
     SmartDashboard.putNumber("Hood/kP", kP);
     SmartDashboard.putNumber("Hood/kI", kI);
     SmartDashboard.putNumber("Hood/kD", kD);
-    SmartDashboard.putNumber(kTargetPositionDegKey, Units.radiansToDegrees(targetAngleRad));
+    SmartDashboard.putNumber(kTargetPositionDegKey, TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetAngleRad)));
     SmartDashboard.putNumber(kTargetSetPosKey, 0.5);
   } // End Hood Constructor
 
@@ -72,23 +73,25 @@ public class Hood extends SubsystemBase {
     if (useSmartDashboardSupplier.getAsBoolean()) {
       double setpointDeg = Units.radiansToDegrees(getSetpointRad());
       double deg = SmartDashboard.getNumber(kTargetPositionDegKey, setpointDeg);
+      double degRounded = TelemetryUtil.roundToTwoDecimals(deg);
       if (state == State.MANUAL) {
         if (!Double.isNaN(lastHoodTargetDashboardWriteDeg)
             && Math.abs(deg - lastHoodTargetDashboardWriteDeg) > Units.radiansToDegrees(kAtTargetToleranceRad)) {
-          setTargetAngleRad(Units.degreesToRadians(deg));
+          setTargetAngleRad(Units.degreesToRadians(degRounded));
           setState(State.TRACKING);
         } else {
-          targetAngleRad = getSetpointRad();
+          setTargetAngleRad(getSetpointRad());
         }
       } else {
-        setTargetAngleRad(Units.degreesToRadians(deg));
+        setTargetAngleRad(Units.degreesToRadians(degRounded));
       }
     } else {
-      targetAngleRad = getSetpointRad();
+      setTargetAngleRad(getSetpointRad());
     }
     double publishedDeg = Units.radiansToDegrees(getSetpointRad());
-    SmartDashboard.putNumber(kTargetPositionDegKey, publishedDeg);
-    lastHoodTargetDashboardWriteDeg = publishedDeg;
+    double roundedPublishedDeg = TelemetryUtil.roundToTwoDecimals(publishedDeg);
+    SmartDashboard.putNumber(kTargetPositionDegKey, roundedPublishedDeg);
+    lastHoodTargetDashboardWriteDeg = roundedPublishedDeg;
 
     boolean manualDirectServo = false;
     double manualServoSetClamped = 0.5;
@@ -113,8 +116,9 @@ public class Hood extends SubsystemBase {
         if (atTarget()) {
           setState(State.AT_TARGET);
 
-          // If the target angle is disabled and the hood angle is greater than the disabled angle, set the state to IDLE.
-          if (targetAngleRad == kDisabledAngleRad && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
+          // If commanded to disabled angle and measured angle reached that region, transition to IDLE.
+          if (Math.abs(targetAngleRad - kDisabledAngleRad) <= kAtTargetToleranceRad
+              && (getAngleRad() > kDisabledAngleRad - kAtTargetToleranceRad)) {
             setState(State.IDLE);
           } else {
             hoodIO.setTargetPosition(getSetpointRad());
@@ -144,12 +148,12 @@ public class Hood extends SubsystemBase {
     lastHoodTargetServoSetWrite = publishedServoSet;
 
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/MotorConnected", hoodInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", Units.radiansToDegrees(hoodInputs.positionRads));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/PositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(hoodInputs.positionRads)));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/VelocityDegPerSec", Units.radiansToDegrees(hoodInputs.velocityRadsPerSec));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", hoodInputs.appliedVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AppliedVolts", TelemetryUtil.roundToTwoDecimals(hoodInputs.appliedVolts));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/AnalogVolts", hoodInputs.analogVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", hoodInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", Units.radiansToDegrees(getSetpointRad()));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/Inputs/SupplyCurrentAmps", TelemetryUtil.roundToTwoDecimals(hoodInputs.supplyCurrentAmps));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/TargetPositionAngle", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(getSetpointRad())));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/UseSmartDashboardWhenManualOverride", useSmartDashboardSupplier.getAsBoolean());
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/AtTargetPosition", atTarget());
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Hood/State", state.name());
@@ -180,7 +184,8 @@ public class Hood extends SubsystemBase {
    * is true.
    */
   public void setTargetAngleRad(double targetRad) {
-    targetAngleRad = ignoreLimitsSupplier.getAsBoolean() ? targetRad : clampTargetAngle(targetRad);
+    double clampedRad = ignoreLimitsSupplier.getAsBoolean() ? targetRad : clampTargetAngle(targetRad);
+    targetAngleRad = Units.degreesToRadians(TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(clampedRad)));
   } // End setTargetAngleRad
 
   /** Whether the Hood is at the target angle within tolerance. */

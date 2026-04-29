@@ -4,13 +4,17 @@ import static frc.robot.subsystems.intake.IntakeConstants.*;
 
 import edu.wpi.first.math.MathUtil;
 import frc.robot.Constants;
+import frc.robot.util.TelemetryUtil;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
 /** Intake subsystem: field-to-storage transfer. */
 public class Intake extends SubsystemBase {
+  private static final String kTargetVoltageKey = "Intake/TargetVoltage";
+  private static final double kTargetVoltageWidgetEpsilon = 1e-3;
 
   /** Intake state: Idle, Intaking (pull in), Reversing (spit out), or Manual. */
   public enum State {
@@ -25,8 +29,9 @@ public class Intake extends SubsystemBase {
   private final String logRoot;
 
   private State state = State.IDLE;
-  private double targetVoltage = kIdleVoltage;
+  private double targetVoltage = TelemetryUtil.roundToTwoDecimals(kIdleVoltage);
   private BooleanSupplier ignoreLimitsSupplier = () -> false;
+  private double lastTargetVoltageDashboardWrite = Double.NaN;
 
   public Intake(IntakeIO io) {
     this(io, "");
@@ -35,22 +40,38 @@ public class Intake extends SubsystemBase {
   public Intake(IntakeIO io, String logRoot) {
     intakeIO = io;
     this.logRoot = logRoot;
+    SmartDashboard.putNumber(kTargetVoltageKey, TelemetryUtil.roundToTwoDecimals(targetVoltage));
   } // End Intake Constructor
 
   @Override
   public void periodic() {
     intakeIO.updateInputs(intakeInputs);
     Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/MotorConnected", intakeInputs.motorConnected);
-    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/AppliedVolts", intakeInputs.appliedVolts);
-    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/SupplyCurrentAmps", intakeInputs.supplyCurrentAmps);
-    Logger.recordOutput(logRoot + "Subsystems/Intake/TargetVolts", getTargetVoltage());
+    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/AppliedVolts", TelemetryUtil.roundToTwoDecimals(intakeInputs.appliedVolts));
+    Logger.recordOutput(logRoot + "Subsystems/Intake/Inputs/SupplyCurrentAmps", TelemetryUtil.roundToTwoDecimals(intakeInputs.supplyCurrentAmps));
+    Logger.recordOutput(logRoot + "Subsystems/Intake/TargetVolts", TelemetryUtil.roundToTwoDecimals(getTargetVoltage()));
     Logger.recordOutput(logRoot + "Subsystems/Intake/IsIntaking", state.name() == State.INTAKING.name());
     Logger.recordOutput(logRoot + "Subsystems/Intake/State", state.name());
 
     if (DriverStation.isDisabled()) {
       intakeIO.stop();
+      lastTargetVoltageDashboardWrite = Double.NaN;
       return;
     }
+
+    double dashboardVolts = SmartDashboard.getNumber(kTargetVoltageKey, targetVoltage);
+    boolean dashboardTargetEdited =
+        !Double.isNaN(lastTargetVoltageDashboardWrite)
+            && Math.abs(dashboardVolts - lastTargetVoltageDashboardWrite) > kTargetVoltageWidgetEpsilon;
+    if (dashboardTargetEdited) {
+      setTargetVoltage(dashboardVolts);
+      if (state == State.IDLE) {
+        state = State.MANUAL;
+      }
+    }
+    targetVoltage = TelemetryUtil.roundToTwoDecimals(targetVoltage);
+    SmartDashboard.putNumber(kTargetVoltageKey, targetVoltage);
+    lastTargetVoltageDashboardWrite = targetVoltage;
 
     // Set the Intake voltage based on the current state.
     switch (state) {
@@ -71,19 +92,19 @@ public class Intake extends SubsystemBase {
   /** Set state to Idle (motor stopped). */
   public void setIdleState() {
     state = State.IDLE;
-    targetVoltage = kIdleVoltage;
+    setTargetVoltage(kIdleVoltage);
   } // End setIdleState
 
   /** Set state to Intaking (pull in at intaking voltage). */
   public void setIntakingState() {
     state = State.INTAKING;
-    targetVoltage = kIntakingVoltage;
+    setTargetVoltage(kIntakingVoltage);
   } // End setIntakingState
 
   /** Set state to Reversing (spit out at reversing voltage). */
   public void setReversingState() {
     state = State.REVERSING;
-    targetVoltage = kReversingVoltage;
+    setTargetVoltage(kReversingVoltage);
   } // End setReversingState
 
   /** Get current state. */
@@ -91,9 +112,9 @@ public class Intake extends SubsystemBase {
     return state;
   } // End getState
 
-  /** Set the target voltage. */
+  /** Set the target voltage (rounded to two decimals). */
   public void setTargetVoltage(double volts) {
-    targetVoltage = volts;
+    targetVoltage = TelemetryUtil.roundToTwoDecimals(volts);
   } // End setTargetVoltage
 
   /** Get the current target voltage. */
@@ -123,6 +144,8 @@ public class Intake extends SubsystemBase {
         ? MathUtil.clamp(stepTargetVoltage, -Constants.kNominalVoltage, Constants.kNominalVoltage)
         : MathUtil.clamp(stepTargetVoltage, -kMaxVoltage, kMaxVoltage));
     }
-    if (getTargetVoltage() == kIdleVoltage) setIdleState();
+    if (Math.abs(getTargetVoltage() - kIdleVoltage) < 1e-6) {
+      setIdleState();
+    }
   } // End stepVoltage
 }

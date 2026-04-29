@@ -43,6 +43,49 @@ public final class HoodConstants { // XXX: Add correct values
   /** Axon analog voltage when hood is at {@link #kAnalogServoCalibHighAngleRad} (same mechanical pose as {@link #kServoSetAt80deg}). */
   public static final double kAnalogVoltsAt80deg = 1.715;
 
+  // TODO: Add correct values
+  /** Axon analog voltage when hood is at 75°. */
+  public static final double kAnalogVoltsAt75deg = 1.7578125;
+
+  /** Axon analog voltage when hood is at 70°. */
+  public static final double kAnalogVoltsAt70deg = 1.800625;
+
+  /** Axon analog voltage when hood is at 65°. */
+  public static final double kAnalogVoltsAt65deg = 1.8434375;
+
+  /** Axon analog voltage when hood is at 60°. */
+  public static final double kAnalogVoltsAt60deg = 1.88625;
+
+  /** Axon analog voltage when hood is at 55°. */
+  public static final double kAnalogVoltsAt55deg = 1.9290625;
+
+  /** Axon analog voltage when hood is at 50°. */
+  public static final double kAnalogVoltsAt50deg = 1.971875;
+
+  /** Ordered hood-angle breakpoints for Axon analog interpolation (rad). */
+  public static final double[] kAnalogAngleBreakpointsRad = {
+    Units.degreesToRadians(0.0),
+    Units.degreesToRadians(50.0),
+    Units.degreesToRadians(55.0),
+    Units.degreesToRadians(60.0),
+    Units.degreesToRadians(65.0),
+    Units.degreesToRadians(70.0),
+    Units.degreesToRadians(75.0),
+    Units.degreesToRadians(80.0)
+  };
+
+  /** Ordered Axon analog voltage breakpoints corresponding to {@link #kAnalogAngleBreakpointsRad}. */
+  public static final double[] kAnalogVoltsBreakpoints = {
+    kAnalogVoltsAt0deg,
+    kAnalogVoltsAt50deg,
+    kAnalogVoltsAt55deg,
+    kAnalogVoltsAt60deg,
+    kAnalogVoltsAt65deg,
+    kAnalogVoltsAt70deg,
+    kAnalogVoltsAt75deg,
+    kAnalogVoltsAt80deg
+  };
+
   /** Idle behavior when output is zero (coast or brake). SPARK MAX only. */
   public static final SparkBaseConfig.IdleMode kIdleMode = SparkBaseConfig.IdleMode.kBrake;
 
