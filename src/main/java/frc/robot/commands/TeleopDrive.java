@@ -117,7 +117,9 @@ public class TeleopDrive extends Command {
     this.drive = drive;
     this.controller = controller;
     this.extender = extender;
-    this.isExtendedSupplier = extender != null ? () -> extender.getState() == State.EXTENDED : () -> false;
+    this.isExtendedSupplier = extender != null
+        ? () -> extender.getState() == State.EXTENDED || extender.getState() == State.PARTIAL
+        : () -> false;
     this.hood = hood;
     this.hang = hang;
     this.isRobotCentricSupplier = isRobotCentricSupplier;
