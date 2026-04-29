@@ -19,19 +19,23 @@ public class VisionConstants {
       AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
 
   // Camera names, must match names configured on coprocessor
-  public static String camera0Name = "Arducam_OV9281_face_rear_left";
-  public static String camera1Name = "Arducam_OV9281_face_rear_right";
+  public static String camera0Name = "front";
+  public static String camera1Name = "rear-left";
+  public static String camera2Name = "rear-right";
 
   // Robot to camera transforms (index by camera index; add more entries when adding cameras)
-  public static Transform3d robotToCamera0 =
-      new Transform3d(-0.275, 0.278, 0.528, new Rotation3d(Math.toRadians(0.0), Math.toRadians(-13.04), Math.toRadians(133.77)));
+  public static Transform3d robotToCamera0 = // TODO: Camera Pos needs to be tuned
+      new Transform3d(0.275, 0.0, 0.528, new Rotation3d(Math.toRadians(0.0), Math.toRadians(-15.0), Math.toRadians(0.0)));
   public static Transform3d robotToCamera1 =
-      new Transform3d(-0.287, 0.144, 0.528, new Rotation3d(Math.toRadians(0.0), Math.toRadians(-13.04), Math.toRadians(-135.0)));
+      new Transform3d(-0.275, 0.278, 0.528, new Rotation3d(Math.toRadians(0.0), Math.toRadians(-15.0), Math.toRadians(135.0)));
+  public static Transform3d robotToCamera2 =
+      new Transform3d(-0.287, 0.144, 0.528, new Rotation3d(Math.toRadians(0.0), Math.toRadians(-15.0), Math.toRadians(-135.0)));
 
   public static Transform3d[] robotToCamera =
       new Transform3d[] {
         robotToCamera0,
-        robotToCamera1
+        robotToCamera1,
+        robotToCamera2
       };
 
   // Basic filtering thresholds
@@ -48,7 +52,8 @@ public class VisionConstants {
   public static double[] cameraStdDevFactors =
       new double[] {
         1.0, // Camera 0
-        1.0 // Camera 1
+        1.0, // Camera 1
+        1.0 // Camera 2
       };
 
   // Multipliers to apply for MegaTag 2 observations

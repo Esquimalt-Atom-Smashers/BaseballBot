@@ -201,9 +201,10 @@ public class RobotContainer {
 				if (isVisionEnabled) {
 					vision = new Vision(drive,
 							new VisionIOPhotonVision(camera0Name, robotToCamera0), 
-							new VisionIOPhotonVision(camera1Name, robotToCamera1));
+							new VisionIOPhotonVision(camera1Name, robotToCamera1),
+							new VisionIOPhotonVision(camera2Name, robotToCamera2));
 				} else {
-					vision = new Vision(drive, new VisionIO() {}, new VisionIO() {});
+					vision = new Vision(drive, new VisionIO() {}, new VisionIO() {}, new VisionIO() {});
 				}
 
 				// Subsystems
@@ -245,7 +246,8 @@ public class RobotContainer {
 				// Initialize Vision after Drive (Vision needs Drive reference)
 				vision = new Vision(drive,
 						new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, driveSimulation::getSimulatedDriveTrainPose),
-						new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, driveSimulation::getSimulatedDriveTrainPose));
+						new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, driveSimulation::getSimulatedDriveTrainPose),
+						new VisionIOPhotonVisionSim(camera2Name, robotToCamera2, driveSimulation::getSimulatedDriveTrainPose));
 
 				// Subsystems
 				intake 	 = new Intake(new IntakeIOSim());
@@ -298,7 +300,7 @@ public class RobotContainer {
 			// Replayed Robot, disable IO implementations
 			default:
 				drive = new Drive(new GyroIO() {}, new ModuleIO() {}, new ModuleIO() {}, new ModuleIO() {}, new ModuleIO() {}, (pose) -> {});
-				vision = new Vision(drive, new VisionIO() {}, new VisionIO() {});
+				vision = new Vision(drive, new VisionIO() {}, new VisionIO() {}, new VisionIO() {});
 
 				// Subsystems
 				intake 	 = new Intake(new IntakeIO() {});
