@@ -25,12 +25,14 @@ import frc.robot.Constants.SwerveConstants;
 import frc.robot.FieldConstants;
 import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.extender.Extender;
+import frc.robot.subsystems.extender.ExtenderConstants;
 import frc.robot.subsystems.hang.Hang;
 import frc.robot.subsystems.hang.HangConstants;
 import frc.robot.subsystems.shooter.hood.Hood;
 import frc.robot.subsystems.shooter.hood.HoodConstants;
 import frc.robot.util.Zones;
 
+import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.littletonrobotics.junction.Logger;
@@ -70,6 +72,9 @@ public class TeleopDrive extends Command {
 
   /** When true, set DriveMode to MANUAL_OVERRIDE (Manual Override). */
   private BooleanSupplier manualOverrideSupplier = () -> false;
+  private Consumer<Boolean> autoShootEnabledSetter = enabled -> {};
+  private boolean autoShootTemporarilyDisabled = false;
+  private boolean invalidTrenchEntryHandled = false;
 
   private DriveMode currentDriveMode = DriveMode.NORMAL;
 
@@ -153,10 +158,15 @@ public class TeleopDrive extends Command {
     }
     inTrenchZoneTrigger = trenchContainmentTrigger.debounce(0.1);
 
-    inTrenchZoneTrigger.onTrue(Commands.run(() -> {
+    inTrenchZoneTrigger.whileTrue(Commands.run(() -> {
       if (shouldUseInvalidTrenchMode()) {
+        if (!invalidTrenchEntryHandled) {
+          onEnterInvalidTrenchMode();
+          invalidTrenchEntryHandled = true;
+        }
         currentDriveMode = DriveMode.INVALID_TRENCH;
       } else {
+        invalidTrenchEntryHandled = false;
         currentDriveMode = DriveMode.TRENCH_LOCK;
         rumbleController(false);
       }
@@ -166,8 +176,13 @@ public class TeleopDrive extends Command {
     // inBumpZoneTrigger.onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.BUMP_LOCK));
     // inTrenchZoneTrigger.or(inBumpZoneTrigger).onFalse(Commands.runOnce(() -> currentDriveMode = DriveMode.NORMAL));
     inTrenchZoneTrigger.whileFalse(Commands.run(() -> {
+      invalidTrenchEntryHandled = false;
       currentDriveMode = DriveMode.NORMAL;
       rumbleController(false);
+      if (autoShootTemporarilyDisabled) {
+        autoShootEnabledSetter.accept(true);
+        autoShootTemporarilyDisabled = false;
+      }
     }));
 
     addRequirements(drive);
@@ -225,6 +240,27 @@ public class TeleopDrive extends Command {
   public void setManualOverrideSupplier(BooleanSupplier supplier) {
     manualOverrideSupplier = supplier != null ? supplier : () -> false;
   } // End setManualOverrideSupplier
+
+  /** Sets callback that enables or disables autoshoot outside this command. */
+  public void setAutoShootEnabledSetter(Consumer<Boolean> setter) {
+    autoShootEnabledSetter = setter != null ? setter : enabled -> {};
+  } // End setAutoShootEnabledSetter
+
+  /** Applies INVALID_TRENCH entry recovery actions for Hang, Extender, and autoshoot lockout. */
+  private void onEnterInvalidTrenchMode() {
+    if (hang.getPositionMeters() > HangConstants.kStoredPositionMeters + HangConstants.kAtTargetToleranceMeters) {
+      hang.setStoredState();
+    }
+    if (extender.getPositionRad() < ExtenderConstants.kExtendedRad - ExtenderConstants.kAtTargetToleranceRad) {
+      extender.setExtendedState();
+    }
+    if (hood.getAngleRad() < HoodConstants.kDisabledAngleRad - HoodConstants.kAtTargetToleranceRad) {
+      if (!autoShootTemporarilyDisabled) {
+        autoShootEnabledSetter.accept(false);
+        autoShootTemporarilyDisabled = true;
+      }
+    }
+  } // End onEnterInvalidTrenchMode
 
   @Override
   public void initialize() {
