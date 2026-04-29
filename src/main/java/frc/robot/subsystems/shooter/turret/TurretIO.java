@@ -21,11 +21,20 @@ public interface TurretIO {
   default void setTargetPosition(double targetRads) {}
 
   /**
-   * Set target position and velocity feedforward (e.g. -robot omega for spin compensation).
-   * Default ignores velocity; override in IO implementations that support it.
+   * Set target position and velocity feedforward (turret rad/s for spin compensation).
+   * Default ignores velocity; Talon uses native vel FF; Spark uses arbitrary FF volts from rate.
    */
   default void setTargetPosition(double targetRads, double velocityFeedforwardRadPerSec) {
     setTargetPosition(targetRads);
+  }
+
+  /**
+   * Set target position with velocity feedforward and precomputed arbitrary feedforward volts.
+   * Default ignores velocity and FF volts.
+   */
+  default void setTargetPosition(
+      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
+    setTargetPosition(targetRads, velocityFeedforwardRadPerSec);
   }
 
   /** Sets the encoder position to 0. */

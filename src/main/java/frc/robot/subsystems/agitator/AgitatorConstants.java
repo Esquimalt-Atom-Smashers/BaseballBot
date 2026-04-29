@@ -17,7 +17,7 @@ public final class AgitatorConstants {
   public static final boolean kMotorInverted = true;
 
   /** Smart current limit. */
-  public static final int kSmartCurrentLimitAmps = 25;
+  public static final int kSmartCurrentLimitAmps = 40;
 
   /** Open-loop ramp time from 0 to full output. Limits current spikes on step changes. */
   public static final double kOpenLoopRampRateSec = 0.0;
@@ -27,7 +27,7 @@ public final class AgitatorConstants {
   public static final int kEncoderVelocitySignalPeriodMs = 251;
 
   /** Max voltage magnitude applied to the motor. */
-  public static final double kMaxVoltage = 11.0;
+  public static final double kMaxVoltage = 12.0;
 
   /** Voltage in Idle state. */
   public static final double kIdleVoltage = 0.0;
@@ -36,7 +36,7 @@ public final class AgitatorConstants {
   public static final double kStagingVoltage = 2.0;
 
   /** Voltage in Shooting state (fast loading). */
-  public static final double kShootingVoltage = 9.5;
+  public static final double kShootingVoltage = 12.0;
 
   /** Delta volts per step. */
   public static final double kStepVolts = 0.25;

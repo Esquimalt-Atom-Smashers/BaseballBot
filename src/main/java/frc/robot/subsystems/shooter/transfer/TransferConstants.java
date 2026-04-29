@@ -30,7 +30,7 @@ public final class TransferConstants {
   public static final int kEncoderVelocitySignalPeriodMs = 251;
 
   /** Max voltage magnitude applied to the motor. */
-  public static final double kMaxVoltage = 10.0;
+  public static final double kMaxVoltage = 12.0;
 
   /** Voltage in Idle state. */
   public static final double kIdleVoltage = 0.0;
@@ -39,7 +39,7 @@ public final class TransferConstants {
   public static final double kStagingVoltage = 2.0;
 
   /** Voltage in Shooting state. */
-  public static final double kShootingVoltage = 8.0;
+  public static final double kShootingVoltage = 12.0;
 
   /** Proximity at or above this value = ball present (REV Color Sensor V3: 0–2047). */
   public static final int kColorSensorProximityThreshold = 150;

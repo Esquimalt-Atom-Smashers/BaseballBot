@@ -22,10 +22,10 @@ public final class FlywheelConstants {
   public static final boolean kMotorInverted = false;
 
   /** Stator current limit (amps); protects motor and gearbox. */
-  public static final double kStatorCurrentLimitAmps = 80.0;
+  public static final double kStatorCurrentLimitAmps = 160.0;
 
   /** PIDF gains for onboard velocity control and for sim. */
-  public static final double kP = 0.2;
+  public static final double kP = 0.4;
   public static final double kI = 0.0;
   public static final double kD = 0.0;
   public static final double kV = 0.117;

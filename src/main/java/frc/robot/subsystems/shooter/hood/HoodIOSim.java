@@ -3,31 +3,32 @@ package frc.robot.subsystems.shooter.hood;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.*;
 
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.filter.SlewRateLimiter;
 
-/** Hood IO for simulation; slew-rate-limited setpoint following. */
+/**
+ * Hood IO using a position servo: commanded elevation is rate-limited.
+ */
 public class HoodIOSim implements HoodIO {
 
-  private final SlewRateLimiter slewRateLimiter = new SlewRateLimiter(kSimMaxSlewRadPerSec);
+  private static final double kLoopPeriodSecs = 0.02;
 
-  private double targetPositionRad = 0.0;
-  private double limitedPositionRad = kDisabledAngleRad;
+  private double targetPositionRad = kDisabledAngleRad;
+  private double currentPositionRad = kDisabledAngleRad;
   private boolean isStopped = false;
-
-  public HoodIOSim() {
-    slewRateLimiter.reset(kDisabledAngleRad);
-  } // End HoodIOSim Constructor
 
   @Override
   public void updateInputs(HoodIOInputs inputs) {
     if (!isStopped) {
-      double clampedTarget = MathUtil.clamp(targetPositionRad, kMinAngleRad, kMaxAngleRad);
-      limitedPositionRad = slewRateLimiter.calculate(clampedTarget);
+      double errorRad = targetPositionRad - currentPositionRad;
+      double maxStepRad = kSimMaxSlewRadPerSec * kLoopPeriodSecs;
+      double stepRad = MathUtil.clamp(errorRad, -maxStepRad, maxStepRad);
+      currentPositionRad += stepRad;
+      inputs.velocityRadsPerSec = stepRad / kLoopPeriodSecs;
+    } else {
+      inputs.velocityRadsPerSec = 0.0;
     }
 
     inputs.motorConnected = true;
-    inputs.positionRads = limitedPositionRad;
-    inputs.velocityRadsPerSec = 0.0;
+    inputs.positionRads = currentPositionRad;
     inputs.appliedVolts = 0.0;
     inputs.supplyCurrentAmps = 0.0;
   } // End updateInputs
@@ -40,9 +41,8 @@ public class HoodIOSim implements HoodIO {
 
   @Override
   public void resetEncoder() {
-    limitedPositionRad = kDisabledAngleRad;
+    currentPositionRad = kDisabledAngleRad;
     targetPositionRad = kDisabledAngleRad;
-    slewRateLimiter.reset(kDisabledAngleRad);
   } // End resetEncoder
 
   @Override

@@ -101,6 +101,35 @@ test {
     systemProperty 'junit.jupiter.extensions.autodetection.enabled', 'true'
 }
 
+/** Prints ShooterLookup {@code TableEntry} lines; run: {@code ./gradlew printShooterLookupSeed} */
+tasks.register('printShooterLookupSeed', JavaExec) {
+    group = 'utility'
+    description = 'Run ShooterLookupTableGenerator.main (paste output into ShooterLookup.java)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'frc.robot.ShooterLookupTableGenerator'
+}
+
+/**
+ * Regenerates {@code TableEntry} lines from {@code ShooterLookup} hub/pass row distances (no args).
+ * Optional single row: {@code LOOKUP_DISTANCE} / {@code -PlookupDistance} (quote decimals on PowerShell, e.g.
+ * {@code "-PlookupDistance=0.9"}) and optional {@code LOOKUP_MODE} / {@code -PlookupMode=hub|passing}.
+ */
+tasks.register('printShooterLookupPoint', JavaExec) {
+    group = 'utility'
+    description = 'ShooterLookupPointGenerator: full table from ShooterLookup keys, or one row via LOOKUP_DISTANCE / -PlookupDistance'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'frc.robot.ShooterLookupPointGenerator'
+    doFirst {
+        def dist = System.getenv('LOOKUP_DISTANCE') ?: (project.hasProperty('lookupDistance') ? project.property('lookupDistance').toString() : null)
+        def mode = System.getenv('LOOKUP_MODE') ?: (project.hasProperty('lookupMode') ? project.property('lookupMode').toString() : null)
+        if (dist != null && !dist.toString().isBlank()) {
+            args = [dist.toString(), (mode != null && !mode.toString().isBlank()) ? mode.toString() : 'hub']
+        } else {
+            args = []
+        }
+    }
+}
+
 // Simulation configuration (e.g. environment variables).
 //
 // The sim GUI is *disabled* by default to support running

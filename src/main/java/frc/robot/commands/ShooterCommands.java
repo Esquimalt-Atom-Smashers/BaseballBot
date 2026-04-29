@@ -10,7 +10,6 @@ import frc.robot.subsystems.shooter.ShooterCalculator;
 import frc.robot.subsystems.shooter.ShooterCalculator.ShotData;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.flywheel.Flywheel;
-import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.subsystems.shooter.flywheel.FlywheelConstants;
 import frc.robot.subsystems.shooter.hood.Hood;
@@ -23,19 +22,21 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import org.littletonrobotics.junction.Logger;
 
-/** Shooter-related command helpers (Hood, Flywheel, Turret aim via ShooterCalculator). */
+/** Shooter-related command helpers (Hood, Flywheel, Turret aim via ShooterCalculator or optional ShooterLookup). */
 public final class ShooterCommands {
 
   private ShooterCommands() {}
 
   private static final String kTargetAimOffsetDegKey = "Shooter/TargetAimOffsetDeg";
   private static final String kExitVelocityMultiplierAdditiveKey = "Shooter/ExitVelocityCompensationMultiplierAdditive";
+  private static final String kUseLookupTableKey = "Shooter/UseLookupTable";
   private static final double kDefaultTargetAimOffsetDeg = 0.0;
   private static final double kDefaultExitVelocityMultiplierAdditive = 0.0;
 
   static {
     SmartDashboard.putNumber(kTargetAimOffsetDegKey, kDefaultTargetAimOffsetDeg);
     SmartDashboard.putNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
+    SmartDashboard.putBoolean(kUseLookupTableKey, false);
   }
 
   /** Per-{@link Drive} passing spot override; null/absent = aim at hub. */
@@ -169,17 +170,33 @@ public final class ShooterCommands {
 
   /**
    * Sets Hood and Flywheel target from ShooterCalculator. When hoodEnabled is false, uses a fixed
-   * Hood angle and solves for velocity only so the shot matches the locked Hood. When true, uses
-   * funnel clearance + moving shot. Applies phase delay, then iterative moving shot; clamps Hood to
-   * mechanism limits. Turret aim uses predicted target and shortest-path azimuth.
+   * Hood elevation and solves for velocity only. When true, uses funnel clearance + moving shot.
+   * Applies phase delay, then iterative moving shot; clamps Hood to mechanism limits.
+   * Turret aim uses predicted target and shortest-path azimuth.
    * When {@code enableCalculator} is false (e.g. manual override), Hood and Flywheel targets are
    * not updated so manual override controls are functional.
+   * When {@code shootWhenReadyActive} is false and {@code hoodEnabled} is true, Hood target is set to
+   * {@link HoodConstants#kDisabledAngleRad}; calculator hood angle is applied only while ShootWhenReady is active
+   * ({@link frc.robot.subsystems.shooter.Shooter#isShootCommandActive()}).
    *
    * @param calculatorLogRoot AdvantageKit prefix; primary {@code ""}, second sim {@link
    *     SecondSimRobotOutputs#LOG_ROOT_PREFIX}. Calculator outputs log under {@code calculatorLogRoot + "Shooter/…"}.
-   *     SmartDashboard calculator tuning uses the same {@code Shooter/…} keys for both robots.
+   *     SmartDashboard calculator tuning uses the same {@code Shooter/…} keys for both robots. Logs {@code
+   *     Shooter/DistanceTurretPivotToHubMeters}: horizontal distance from turret pivot to the aim point (hub or
+ *     passing): calculator uses {@link ShooterCalculator#getHorizontalRangeForShot}; lookup uses {@link
+ *     ShooterCalculator#iterativeMovingShotFromLookupTable} (TOF iteration to ghost target; logged distance key is the
+ *     converged range). SmartDashboard {@code Shooter/UseLookupTable}
+   *     selects lookup vs calculator when the hood path is active.
    */
-  public static void setShooterTarget(Drive drive, Turret turret, Hood hood, Flywheel flywheel, boolean hoodEnabled, boolean enableCalculator, String calculatorLogRoot) {
+  public static void setShooterTarget(
+      Drive drive,
+      Turret turret,
+      Hood hood,
+      Flywheel flywheel,
+      boolean hoodEnabled,
+      boolean enableCalculator,
+      boolean shootWhenReadyActive,
+      String calculatorLogRoot) {
     String logRoot = calculatorLogRoot != null ? calculatorLogRoot : "";
 
     Pose2d pose = drive.getPose();
@@ -198,54 +215,106 @@ public final class ShooterCommands {
             pose.getRotation()
                 .plus(Rotation2d.fromRadians(fieldSpeeds.omegaRadiansPerSecond * phaseDelaySec)));
 
-    ShotData shot;
-    if (hoodEnabled) {
-      shot =
-          ShooterCalculator.iterativeMovingShotFromFunnelClearance(
-              estimatedPose, fieldSpeeds, target3d, ShooterConstants.kLookaheadIterations);
-    } else {
-      shot =
-          ShooterCalculator.iterativeMovingShotWithFixedHoodAngle(
+    boolean useLookupTable = hoodEnabled && SmartDashboard.getBoolean(kUseLookupTableKey, false);
+    Logger.recordOutput(logRoot + "Shooter/UseLookupTable", useLookupTable);
+
+    ShotData shot = null;
+    if (!hoodEnabled) {
+      shot = ShooterCalculator.iterativeMovingShotWithFixedHoodAngle(
+          estimatedPose,
+          fieldSpeeds,
+          target3d,
+          ShooterConstants.kFixedHoodAngleWhenDisabledRad,
+          ShooterConstants.kLookaheadIterations);
+    } else if (!useLookupTable) {
+      shot = ShooterCalculator.iterativeMovingShotFromFunnelClearance(
+          estimatedPose, fieldSpeeds, target3d, ShooterConstants.kLookaheadIterations);
+    }
+
+    double exitVelMps;
+    double hoodAngleRadFromSolve;
+    Translation3d aimTarget3d;
+    double distanceTurretPivotToHubM;
+    double flywheelRadPerSec;
+
+    double exitVelocityMultiplierAdditive =
+        SmartDashboard.getNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
+
+    if (useLookupTable) {
+      ShooterCalculator.LookupTableMovingShot lookupShot =
+          ShooterCalculator.iterativeMovingShotFromLookupTable(
               estimatedPose,
               fieldSpeeds,
               target3d,
-              ShooterConstants.kFixedHoodAngleWhenDisabledRad,
-              ShooterConstants.kLookaheadIterations);
+              ShooterConstants.kLookaheadIterations,
+              isShooterTargetHub(drive));
+      hoodAngleRadFromSolve = lookupShot.commandedHoodAngleRad();
+      double rpmCmd =
+          lookupShot.flywheelRpmTable()
+              * (ShooterConstants.kExitVelocityCompensationMultiplier + exitVelocityMultiplierAdditive)
+              / ShooterConstants.kExitVelocityCompensationMultiplier;
+      flywheelRadPerSec = Units.rotationsPerMinuteToRadiansPerSecond(rpmCmd);
+      aimTarget3d = lookupShot.aimTarget3d();
+      distanceTurretPivotToHubM = lookupShot.distanceKeyMeters();
+      double surfaceMps =
+          ShooterCalculator.angularToLinearVelocity(
+                  RadiansPerSecond.of(flywheelRadPerSec),
+                  Meters.of(FlywheelConstants.kFlywheelRadiusMeters))
+              .in(MetersPerSecond);
+      exitVelMps =
+          surfaceMps
+              / (ShooterConstants.kExitVelocityCompensationMultiplier + exitVelocityMultiplierAdditive)
+              * ShooterConstants.kFlywheelSurfaceDivider;
+      Logger.recordOutput(logRoot + "Shooter/ShotSource", "Lookup");
+      Logger.recordOutput(logRoot + "Shooter/LookupDistanceKeyMeters", lookupShot.distanceKeyMeters());
+      Logger.recordOutput(logRoot + "Shooter/LookupCommandedHoodDeg", Units.radiansToDegrees(hoodAngleRadFromSolve));
+      Logger.recordOutput(logRoot + "Shooter/LookupExitHoodDeg", Units.radiansToDegrees(lookupShot.hoodExitAngleRad()));
+      Logger.recordOutput(logRoot + "Shooter/LookupFlywheelRpmTable", lookupShot.flywheelRpmTable());
+      Logger.recordOutput(logRoot + "Shooter/LookupTimeOfFlightSec", lookupShot.timeOfFlightSec());
+    } else {
+      if (shot == null) {
+        throw new IllegalStateException("Shooter shot solver did not run");
+      }
+      exitVelMps = shot.getExitVelocity().in(MetersPerSecond);
+      hoodAngleRadFromSolve = shot.getHoodAngle().in(Radians);
+      aimTarget3d = shot.getTarget();
+      distanceTurretPivotToHubM =
+          ShooterCalculator.getHorizontalRangeForShot(estimatedPose, shot).in(Meters);
+      double flywheelSurfaceSpeedMps = exitVelMps / ShooterConstants.kFlywheelSurfaceDivider
+              * (ShooterConstants.kExitVelocityCompensationMultiplier + exitVelocityMultiplierAdditive);
+      flywheelRadPerSec =
+          ShooterCalculator.linearToAngularVelocity(
+                  MetersPerSecond.of(flywheelSurfaceSpeedMps),
+                  Meters.of(FlywheelConstants.kFlywheelRadiusMeters))
+              .in(RadiansPerSecond);
+      Logger.recordOutput(logRoot + "Shooter/ShotSource", "Calculator");
     }
 
-    double distanceM = ShooterCalculator.getDistanceToTarget(estimatedPose, shot.getTarget()).in(Meters);
-    Logger.recordOutput(logRoot + "Shooter/DistanceToHubMeters", distanceM);
-    Logger.recordOutput(logRoot + "Shooter/CalculatorHoodDeg", Units.radiansToDegrees(shot.getHoodAngle().in(Radians)));
-    double exitVelMps = shot.getExitVelocity().in(MetersPerSecond);
-    double exitVelocityMultiplierAdditive =
-        SmartDashboard.getNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
-    double flywheelSurfaceSpeedMps = exitVelMps / ShooterConstants.kFlywheelSurfaceDivider
-            * (ShooterConstants.kExitVelocityCompensationMultiplier + exitVelocityMultiplierAdditive);
-    double flywheelRadPerSec = ShooterCalculator.linearToAngularVelocity(
-            MetersPerSecond.of(flywheelSurfaceSpeedMps), Meters.of(FlywheelConstants.kFlywheelRadiusMeters)).in(RadiansPerSecond);
+    Logger.recordOutput(logRoot + "Shooter/DistanceTurretPivotToHubMeters", distanceTurretPivotToHubM);
+    Logger.recordOutput(logRoot + "Shooter/CalculatorHoodDeg", Units.radiansToDegrees(hoodAngleRadFromSolve));
     Logger.recordOutput(logRoot + "Shooter/CalculatorVelocityRpm", Units.radiansPerSecondToRotationsPerMinute(flywheelRadPerSec));
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityMps", exitVelMps);
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditive", exitVelocityMultiplierAdditive);
 
-    double hoodAngleRad =
-        MathUtil.clamp(
-            shot.getHoodAngle().in(Radians),
-            HoodConstants.kMinAngleRad,
-            HoodConstants.kMaxAngleRad);
     if (enableCalculator) {
-      hood.setTargetAngleRad(hoodAngleRad);
+      if (hoodEnabled) {
+        if (shootWhenReadyActive) {
+          hood.setTargetAngleRad(hoodAngleRadFromSolve);
+        } else {
+          hood.setTargetAngleRad(HoodConstants.kDisabledAngleRad);
+        }
+      }
       flywheel.setTargetVelocityRadPerSec(flywheelRadPerSec);
     }
 
     // We provide the turret "current angle" to the calculator in the turret's internal frame
-    // so shortest-path selection respects kMinAngleRad/kMaxAngleRad.
+    // so shortest-path selection respects TurretConstants travel limits.
     double targetAimOffsetDegAdditive = SmartDashboard.getNumber(kTargetAimOffsetDegKey, kDefaultTargetAimOffsetDeg);
     lastTurretAngleFromShotByDrive.put(
         drive,
-        Rotation2d.fromRadians(
-                ShooterCalculator.calculateAzimuthAngle(
-                        estimatedPose, shot.getTarget(), turret.getPosition().getRadians())
-                    .in(Radians))
+        Rotation2d.fromRadians(ShooterCalculator.calculateAzimuthAngle(
+            estimatedPose, aimTarget3d, turret.getPosition().getRadians())
+            .in(Radians))
             .plus(Rotation2d.fromDegrees(ShooterConstants.kTargetAimOffsetDeg + targetAimOffsetDegAdditive)));
     Logger.recordOutput(logRoot + "Shooter/TargetAimOffsetDeg", ShooterConstants.kTargetAimOffsetDeg + targetAimOffsetDegAdditive);
   } // End setShooterTarget

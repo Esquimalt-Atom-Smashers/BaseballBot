@@ -35,13 +35,32 @@ import frc.robot.subsystems.shooter.turret.TurretConstants;
 
 /**
  * Physics-based shooter calculator: funnel clearance parabola and iterative moving shot.
- * All units: meters, radians, m/s. Hood angle convention: from vertical (π/2 − elevation from
- * horizontal).
+ * All units: meters, radians, m/s. Hood angle is launch elevation from horizontal: 0 = parallel to
+ * the floor, π/2 = straight up.
  */
 public class ShooterCalculator {
+
+    /** Turret pivot projected on the field XY (m), same frame as {@link #calculateAzimuthAngle}. */
+    private static Translation2d turretTranslationOnField(Pose2d robot) {
+        return new Pose3d(robot).transformBy(robotToTurret).toPose2d().getTranslation();
+    } // End turretTranslationOnField
+
+    /**
+     * Horizontal distance (m) from the turret pivot XY to {@code target} on the floor (hub XY).
+     * Used as ballistic range ({@code x_dist}), time-of-flight input, and funnel scaling ratio so range
+     * matches where the shot aims from.
+     */
     public static Distance getDistanceToTarget(Pose2d robot, Translation3d target) {
-        return Meters.of(robot.getTranslation().getDistance(target.toTranslation2d()));
-    }
+        return Meters.of(turretTranslationOnField(robot).getDistance(target.toTranslation2d()));
+    } // End getDistanceToTarget
+
+    /**
+     * Same horizontal range as {@link #getDistanceToTarget} for the hub stored in {@code shot}
+     * (predicted hub when iterating).
+     */
+    public static Distance getHorizontalRangeForShot(Pose2d robot, ShotData shot) {
+        return getDistanceToTarget(robot, shot.getTarget());
+    } // End getHorizontalRangeForShot
 
     // see https://www.desmos.com/geometry/l4edywkmha
     public static Angle calculateAngleFromVelocity(Pose2d robot, LinearVelocity velocity, Translation3d target) {
@@ -58,7 +77,7 @@ public class ShooterCalculator {
     // calculates how long it will take for a projectile to travel a set distance given its initial velocity and angle
     public static Time calculateTimeOfFlight(LinearVelocity exitVelocity, Angle hoodAngle, Distance distance) {
         double vel = exitVelocity.in(MetersPerSecond);
-        double angle = Math.PI / 2 - hoodAngle.in(Radians);
+        double angle = hoodAngle.in(Radians);
         double dist = distance.in(Meters);
         return Seconds.of(dist / (vel * Math.cos(angle)));
     }
@@ -82,11 +101,7 @@ public class ShooterCalculator {
      */
     public static Angle calculateAzimuthAngle(
             Pose2d robot, Translation3d target, double currentTurretAngleRad) {
-        Translation2d turretTranslation = new Pose3d(robot)
-                .transformBy(robotToTurret)
-                .toPose2d()
-                .getTranslation();
-        Translation2d direction = target.toTranslation2d().minus(turretTranslation);
+        Translation2d direction = target.toTranslation2d().minus(turretTranslationOnField(robot));
         double angleRad =
                 MathUtil.inputModulus(
                         direction.getAngle().minus(robot.getRotation()).getRadians(),
@@ -102,6 +117,42 @@ public class ShooterCalculator {
         }
         return Radians.of(angleRad);
     }
+
+    /**
+     * Time derivative of the robot-frame azimuth from turret pivot to a field-fixed XY point (rad/s),
+     * matching the angle in {@link #calculateAzimuthAngle(Pose2d, Translation3d)}. Use as turret
+     * velocity feedforward: when the pivot orbits the robot center during yaw, field bearing to the
+     * hub changes, so {@code -omega} alone is incomplete.
+     *
+     * <p>Model: target fixed; pivot moves with the chassis. ψ = φ − θ with φ = atan2(w) in field and
+     * θ robot heading, so dψ/dt = dφ/dt − ω.
+     */
+    public static double robotFramePivotToTargetAimRateRadPerSec(
+            Pose2d robotPose, ChassisSpeeds robotRelativeSpeeds, Translation2d targetXY) {
+        Translation2d rBody = new Translation2d(robotToTurret.getX(), robotToTurret.getY());
+        double omega = robotRelativeSpeeds.omegaRadiansPerSecond;
+
+        Translation2d pivotField = turretTranslationOnField(robotPose);
+        Translation2d w = targetXY.minus(pivotField);
+        double wNormSq = w.getNorm() * w.getNorm();
+        if (wNormSq < 1e-8) {
+            return -omega;
+        }
+
+        // Pivot velocity in robot frame (origin translation + ω×r), then rotate to field.
+        Translation2d vPivotRobot =
+                new Translation2d(
+                        robotRelativeSpeeds.vxMetersPerSecond - omega * rBody.getY(),
+                        robotRelativeSpeeds.vyMetersPerSecond + omega * rBody.getX());
+        Translation2d vPivotField = vPivotRobot.rotateBy(robotPose.getRotation());
+
+        double wx = w.getX();
+        double wy = w.getY();
+        double dwx = -vPivotField.getX();
+        double dwy = -vPivotField.getY();
+        double dPhiDt = (wx * dwy - wy * dwx) / wNormSq;
+        return dPhiDt - omega;
+    } // End robotFramePivotToTargetAimRateRadPerSec
 
     // Move a target a set time in the future along a velocity defined by fieldSpeeds
     public static Translation3d predictTargetPos(Translation3d target, ChassisSpeeds fieldSpeeds, Time timeOfFlight) {
@@ -142,13 +193,14 @@ public class ShooterCalculator {
         double D3 = Bm * D1 + D2;
         double a = D3 / A3;
         double b = (D1 - A1 * a) / B1;
+        // theta = atan(b) is launch slope dy/dx at the muzzle → elevation from horizontal.
         double theta = Math.atan(b);
         double v0 = Math.sqrt(-g / (2 * a * (Math.cos(theta)) * (Math.cos(theta))));
         if (Double.isNaN(v0) || Double.isNaN(theta)) {
             v0 = 0;
             theta = 0;
         }
-        return new ShotData(InchesPerSecond.of(v0), Radians.of(Math.PI / 2 - theta), predictedTarget);
+        return new ShotData(InchesPerSecond.of(v0), Radians.of(theta), predictedTarget);
     }
 
     // use an iterative lookahead approach to determine shot parameters for a moving robot
@@ -172,32 +224,34 @@ public class ShooterCalculator {
     }
 
     /**
-     * Shot with a fixed hood angle (e.g. when hood is disabled). Solves for velocity only so the
+     * Shot with a fixed hood elevation (e.g. when hood is disabled). Solves for velocity only so the
      * ball hits the target. No funnel clearance constraint.
+     *
+     * @param hoodElevationFromHorizontalRad launch angle from horizontal (radians)
      */
     public static ShotData calculateShotWithFixedHoodAngle(
-            Pose2d robot, Translation3d predictedTarget, double hoodAngleFromVerticalRad) {
+            Pose2d robot, Translation3d predictedTarget, double hoodElevationFromHorizontalRad) {
         double xDist = getDistanceToTarget(robot, predictedTarget).in(Meters);
         double yDist = predictedTarget.getZ() - robotToTurret.getZ();
-        double theta = Math.PI / 2 - hoodAngleFromVerticalRad; // elevation from horizontal
+        double theta = hoodElevationFromHorizontalRad;
         double denom = 2 * Math.cos(theta) * Math.cos(theta) * (xDist * Math.tan(theta) - yDist);
         double v0Sq = (denom > 1e-6) ? (G_MPS2 * xDist * xDist) / denom : 0;
         double v0 = Math.sqrt(Math.max(0, v0Sq));
         if (Double.isNaN(v0)) v0 = 0;
-        return new ShotData(MetersPerSecond.of(v0), Radians.of(hoodAngleFromVerticalRad), predictedTarget);
+        return new ShotData(MetersPerSecond.of(v0), Radians.of(hoodElevationFromHorizontalRad), predictedTarget);
     }
 
     /** Iterative moving shot with fixed hood angle (velocity-only solve each step). */
     public static ShotData iterativeMovingShotWithFixedHoodAngle(
             Pose2d robot, ChassisSpeeds fieldSpeeds, Translation3d target,
-            double hoodAngleFromVerticalRad, int iterations) {
-        ShotData shot = calculateShotWithFixedHoodAngle(robot, target, hoodAngleFromVerticalRad);
+            double hoodElevationFromHorizontalRad, int iterations) {
+        ShotData shot = calculateShotWithFixedHoodAngle(robot, target, hoodElevationFromHorizontalRad);
         Distance distance = getDistanceToTarget(robot, target);
         Time timeOfFlight = calculateTimeOfFlight(shot.getExitVelocity(), shot.getHoodAngle(), distance);
         Translation3d predictedTarget = target;
         for (int i = 0; i < iterations; i++) {
             predictedTarget = predictTargetPos(target, fieldSpeeds, timeOfFlight);
-            shot = calculateShotWithFixedHoodAngle(robot, predictedTarget, hoodAngleFromVerticalRad);
+            shot = calculateShotWithFixedHoodAngle(robot, predictedTarget, hoodElevationFromHorizontalRad);
             distance = getDistanceToTarget(robot, predictedTarget);
             timeOfFlight = calculateTimeOfFlight(shot.getExitVelocity(), shot.getHoodAngle(), distance);
         }
@@ -205,6 +259,49 @@ public class ShooterCalculator {
     }
 
     private static final double G_MPS2 = 9.81;
+
+    /**
+     * Lookup-table moving shot after TOF iteration: hood/RPM/TOF from {@link ShooterLookup} at the converged
+     * horizontal range to the ghost target, and the aim point (predicted hub) for turret.
+     */
+    public record LookupTableMovingShot(
+            double hoodExitAngleRad,
+            double commandedHoodAngleRad,
+            double flywheelRpmTable,
+            double timeOfFlightSec,
+            Translation3d aimTarget3d,
+            double distanceKeyMeters) {}
+
+    /**
+     * Same idea as iterative funnel clearance, but hood/RPM/TOF come from {@link ShooterLookup} at each step.
+     * Re-reads distance from turret pivot to the predicted target and interpolates table rows so moving shots stay
+     * consistent with table TOF (tunable stationary).
+     */
+    public static LookupTableMovingShot iterativeMovingShotFromLookupTable(
+            Pose2d robot,
+            ChassisSpeeds fieldSpeeds,
+            Translation3d target,
+            int iterations,
+            boolean hubShot) {
+        double distance = getDistanceToTarget(robot, target).in(Meters);
+        ShooterLookup.Result lr = ShooterLookup.lookup(hubShot, distance);
+        Time tof = Seconds.of(lr.timeOfFlightSec());
+        Translation3d predicted = target;
+
+        for (int i = 0; i < iterations; i++) {
+            predicted = predictTargetPos(target, fieldSpeeds, tof);
+            distance = getDistanceToTarget(robot, predicted).in(Meters);
+            lr = ShooterLookup.lookup(hubShot, distance);
+            tof = Seconds.of(lr.timeOfFlightSec());
+        }
+        return new LookupTableMovingShot(
+                lr.hoodExitAngleRad(),
+                lr.hoodAngleRad(),
+                lr.flywheelRpmTable(),
+                lr.timeOfFlightSec(),
+                predicted,
+                distance);
+    }
 
     public record ShotData(double exitVelocity, double hoodAngle, Translation3d target) {
         public ShotData(LinearVelocity exitVelocity, Angle hoodAngle, Translation3d target) {

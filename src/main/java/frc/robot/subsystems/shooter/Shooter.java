@@ -18,7 +18,7 @@ import frc.robot.subsystems.shooter.transfer.Transfer;
 import frc.robot.subsystems.shooter.turret.Turret;
 import frc.robot.util.AllianceUtil;
 
-/** Coordinates Agitator, Transfer, Turret, Hood, Flywheel; updates targets from lookup; exposes ready-to-shoot. */
+/** Coordinates Agitator, Transfer, Turret, Hood, Flywheel; updates targets from calculator or optional lookup; exposes ready-to-shoot. */
 public class Shooter extends SubsystemBase {
 
   private final Drive drive;
@@ -34,7 +34,7 @@ public class Shooter extends SubsystemBase {
   private BooleanSupplier shootCommandScheduledSupplier = () -> false;
   /** Set by ShootWhenReadyCommand in initialize/end so active is true when running. */
   private volatile boolean shootCommandActive = false;
-  /** When true, ShooterCommands.setShooterTarget will not apply calculator to Hood/Flywheel (Manual Override). */
+  /** When true, ShooterCommands.setShooterTarget will not apply calculator to Hood/Flywheel (Manual Override). Hood angle from the calculator is applied only when ShootWhenReady is active ({@link #isShootCommandActive()}). */
   private BooleanSupplier manualOverrideSupplier = () -> false;
 
   /** Supplies whether this robot uses red-side field conventions (hub X, zones). */
@@ -129,16 +129,26 @@ public class Shooter extends SubsystemBase {
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/TurretAtTarget", turret.atTarget());
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/HoodAtTarget", !hoodEnabled || hood.atTarget());
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTarget", flywheel.atTargetVelocity());
-    Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTargetWithinGracePeriod", !(flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec));
+    Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelAtTargetWithinGracePeriod",
+        !(flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec) && flywheel.atTargetVelocityWithinDoubleTolerance());
     Logger.recordOutput(logRoot + "ShooterCommand/Ready/FlywheelNotIdle", flywheel.getState() != State.IDLE);
 
-    ShooterCommands.setShooterTarget(drive, turret, hood, flywheel, hoodEnabled, !manualOverrideSupplier.getAsBoolean(), logRoot);
+    ShooterCommands.setShooterTarget(
+        drive,
+        turret,
+        hood,
+        flywheel,
+        hoodEnabled,
+        !manualOverrideSupplier.getAsBoolean(),
+        isShootCommandActive(),
+        logRoot);
   } // End periodic
 
   /**
    * Turret target in range and on target, Flywheel not Idle and at target speed (with {@link
-   * ShooterConstants#kFlywheelOffTargetGraceSec} grace after leaving target speed); (Optional) Hood at target. When
-   * shooter target is hub, robot must be in alliance zone and at least {@link
+   * ShooterConstants#kFlywheelOffTargetGraceSec} grace after leaving target speed, only while error is within
+   * double flywheel tolerance); (Optional) Hood at target
+   * elevation. When shooter target is hub, robot must be in alliance zone and at least {@link
    * ShooterConstants#kMinHubAutoshootDistanceM} from hub center.
    */
   public boolean isReadyToShoot() {
@@ -153,8 +163,11 @@ public class Shooter extends SubsystemBase {
     if (!turret.isTargetInRange()) return false;
     if (!turret.atTarget()) return false;
     if (flywheel.getState() == State.IDLE) return false;
-    if (flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec) return false;
-    if (hoodEnabled && !hood.atTarget()) return false;
+    if (!flywheel.atTargetVelocity()) {
+      if (!flywheel.atTargetVelocityWithinDoubleTolerance()) return false;
+      if (flywheelOffTargetGraceTimerSec >= ShooterConstants.kFlywheelOffTargetGraceSec) return false;
+    }
+    // if (hoodEnabled && !hood.atTarget()) return false; // TODO: Add back when Hood atTarget is functional (incorrect position reported from Hood)
     return true;
   } // End isReadyToShoot
 

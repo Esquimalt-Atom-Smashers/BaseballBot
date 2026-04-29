@@ -6,6 +6,7 @@ import com.revrobotics.REVLibError;
 import com.revrobotics.PersistMode;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.ResetMode;
+import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkBase;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel;
@@ -86,9 +87,18 @@ public class TurretIOSparkMax implements TurretIO {
 
   @Override
   public void setTargetPosition(double targetRads, double velocityFeedforwardRadPerSec) {
+    setTargetPosition(targetRads, velocityFeedforwardRadPerSec, 0.0);
+  } // End setTargetPosition
+
+  @Override
+  public void setTargetPosition(
+      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
     double targetRot = Units.radiansToRotations(targetRads);
-    closedLoopController.setSetpoint(targetRot, SparkBase.ControlType.kPosition);
-    // SPARK MAX position control does not expose velocity feedforward; ignore
+    closedLoopController.setSetpoint(
+        targetRot,
+        SparkBase.ControlType.kPosition,
+        ClosedLoopSlot.kSlot0,
+        arbitraryFeedforwardVolts);
   } // End setTargetPosition
   
   @Override

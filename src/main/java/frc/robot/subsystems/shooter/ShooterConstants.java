@@ -23,14 +23,14 @@ public final class ShooterConstants {
   public static final double kAutoSelectShootingTargetAllianceZoneTolerance = 1.5;
 
   /** When aiming at the hub, autoshoot requires at least this horizontal distance to hub center (m). */
-  public static final double kMinHubAutoshootDistanceM = 2.0;
+  public static final double kMinHubAutoshootDistanceM = 1.0; // TODO: May need tuning
 
   /** Transform from robot center to Turret pivot. +X = forward, +Y = left, +Z = up (meters). */
   public static final Transform3d robotToTurret =
       new Transform3d(-0.07, -0.165, 0.45, new Rotation3d(0.0, 0.0, Units.degreesToRadians(0.0)));
 
   /** Distance above funnel the trajectory must pass (20 in), meters. */
-  public static final double kDistanceAboveFunnelM = Units.inchesToMeters(20.0);
+  public static final double kDistanceAboveFunnelM = Units.inchesToMeters(0.0); // TODO: Increase if balls shoot too low.
 
   /** Number of iterations for moving-shot lookahead. */
   public static final int kLookaheadIterations = 3;
@@ -42,7 +42,7 @@ public final class ShooterConstants {
    * After the flywheel leaves target velocity, {@link frc.robot.subsystems.shooter.Shooter#isReadyToShoot}
    * stays true for this long before reporting not ready. Timer resets when velocity is back on target.
    */
-  public static final double kFlywheelOffTargetGraceSec = 0.3;
+  public static final double kFlywheelOffTargetGraceSec = 0.1;
 
   /** Time before the hub is active that we treat the hub as active for the preshoot */
   public static final Time kActivePreshootTime = Seconds.of(2.0);
@@ -51,7 +51,7 @@ public final class ShooterConstants {
   public static final double kTargetAimOffsetDeg = 0.0;
 
   /** Multiplier on calculator exit velocity (e.g. air resistance). 1.0 = no change. */
-  public static final double kExitVelocityCompensationMultiplier = 1.19;
+  public static final double kExitVelocityCompensationMultiplier = 1.19; // TODO: + 0.2 for shooting Calculator, keep same for Lookup 
 
   /**
    * Sim-only efficiency from flywheel surface speed to launched fuel speed. Models wheel slip/transfer
@@ -72,8 +72,8 @@ public final class ShooterConstants {
   public static final double kScaleLinearVelocityPower = 0.3;
 
   /**
-   * Hood angle from vertical when Hood is disabled / locked. Steeper (smaller value) raises the
-   * trajectory apex so it clears the funnel; 30° from vertical ≈ 60° elevation from horizontal.
+   * Hood elevation from horizontal (radians) when Hood is disabled / locked; velocity solve uses
+   * this fixed launch angle. Matches {@link HoodConstants#kDisabledAngleRad}.
    */
   public static final double kFixedHoodAngleWhenDisabledRad = HoodConstants.kDisabledAngleRad;
 
