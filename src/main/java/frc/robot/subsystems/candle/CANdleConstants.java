@@ -27,6 +27,8 @@ public class CANdleConstants {
   public static final RGBWColor kShootWhenReadyScheduledColor = new RGBWColor(0, 0, 255, 255);
   /** Strobe red: driver or operator manual override */
   public static final RGBWColor kManualOverrideColor = new RGBWColor(255, 0, 0, 255);
+  /** Strobe red: driver or operator manual override */
+  public static final RGBWColor kShootWhenReadyTempDisabledColor = new RGBWColor(133, 109, 20, 255);
 
   /** Strobe animation: manual override is on (Driver or operator) */
   public static final AnimationType kManualOverrideAnimation = AnimationType.SingleFade;

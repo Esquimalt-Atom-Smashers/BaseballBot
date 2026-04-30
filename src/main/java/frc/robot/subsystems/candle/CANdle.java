@@ -5,6 +5,7 @@ import static frc.robot.subsystems.candle.CANdleConstants.kShootWhenReadyColor;
 import static frc.robot.subsystems.candle.CANdleConstants.kIdleColor;
 import static frc.robot.subsystems.candle.CANdleConstants.kManualOverrideColor;
 import static frc.robot.subsystems.candle.CANdleConstants.kShootWhenReadyScheduledColor;
+import static frc.robot.subsystems.candle.CANdleConstants.kShootWhenReadyTempDisabledColor;
 import static frc.robot.subsystems.candle.CANdleConstants.kManualOverrideAnimation;
 import static frc.robot.subsystems.candle.CANdleConstants.kDisabledAnimation;
 
@@ -27,7 +28,8 @@ public class CANdle extends SubsystemBase {
 
   private Shooter shooter;
 
-  private BooleanSupplier shootWhenReadySupplier = () -> false;
+  private BooleanSupplier autoShootEnabledSupplier = () -> false;
+  private BooleanSupplier autoShootTempDisabledSupplier = () -> false;
   private BooleanSupplier manualOverrideSupplier = () -> false;
 
   public CANdle(CANdleIO io) {
@@ -37,7 +39,8 @@ public class CANdle extends SubsystemBase {
   @Override
   public void periodic() {
     boolean override = manualOverrideSupplier.getAsBoolean();
-    boolean shootReady = shootWhenReadySupplier.getAsBoolean();
+    boolean shootReady = autoShootEnabledSupplier.getAsBoolean();
+    boolean shootTempDisabled = autoShootTempDisabledSupplier.getAsBoolean();
 
     // Setting the led color
     if (override) {
@@ -49,6 +52,9 @@ public class CANdle extends SubsystemBase {
       if (shooter.isReadyToShoot()) {
         setLEDColor(kShootWhenReadyColor);
         Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootingWhenReady");
+      } else if (shootTempDisabled) {
+        setLEDColor(kShootWhenReadyTempDisabledColor);
+        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyTempDisabled");
       } else {
         setLEDColor(kShootWhenReadyScheduledColor);
         Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyScheduled");
@@ -77,15 +83,20 @@ public class CANdle extends SubsystemBase {
     Logger.recordOutput("Subsystems/LED/CANdle/Inputs/EndLEDIndex", candleIOInputs.endLEDIndex);
   } // End periodic
 
-  /** Supplier: true while {@link frc.robot.commands.ShootWhenReadyCommand} (or equivalent) is active. */
-  public void setShootWhenReadySupplier(BooleanSupplier supplier) {
-    shootWhenReadySupplier = supplier != null ? supplier : () -> false;
-  } // End setShootWhenReadySupplier
+  /** Supplier: true while {@link frc.robot.commands.autoShootEnabled} (or equivalent) is active. */
+  public void setAutoShootEnabledSupplier(BooleanSupplier supplier) {
+    autoShootEnabledSupplier = supplier != null ? supplier : () -> false;
+  } // End setAutoShootEnabledSupplier
 
   /** Supplier: true when driver or operator manual override should flash red. */
   public void setManualOverrideSupplier(BooleanSupplier supplier) {
     manualOverrideSupplier = supplier != null ? supplier : () -> false;
   } // End setManualOverrideSupplier
+
+  /** Supplier: true while in the trench  */
+  public void setAutoShootTempDisabledSupplier(BooleanSupplier supplier) {
+    autoShootTempDisabledSupplier = supplier != null ? supplier : () -> false;
+  } // End setAutoShootTempDisabledSupplier
 
   /** Set shooter subsystem */
   public void setShooter(Shooter shooter) {
