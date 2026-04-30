@@ -507,19 +507,6 @@
             }
           },
           {
-            "title": "Front Camera",
-            "x": 0.0,
-            "y": 380.0,
-            "width": 475.0,
-            "height": 380.0,
-            "type": "Camera Stream",
-            "properties": {
-              "topic": "/CameraPublisher/webcam_0-raw",
-              "period": 0.06,
-              "rotation_turns": 0
-            }
-          },
-          {
             "title": "Match Time",
             "x": 95.0,
             "y": 190.0,
@@ -536,27 +523,40 @@
             }
           },
           {
-            "title": "Rear-Left Camera",
-            "x": 475.0,
+            "title": "Front Camera",
+            "x": 0.0,
             "y": 380.0,
             "width": 380.0,
             "height": 380.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1183_Input_MJPEG_Server",
+              "topic": "/CameraPublisher/photonvision-front_Port_1181_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Rear-Left Camera",
+            "x": 380.0,
+            "y": 380.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-rear_Port_1183_Input_MJPEG_Server",
               "period": 0.06,
               "rotation_turns": 0
             }
           },
           {
             "title": "Rear-Right Camera",
-            "x": 855.0,
+            "x": 760.0,
             "y": 380.0,
             "width": 380.0,
             "height": 380.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1181_Input_MJPEG_Server",
+              "topic": "/CameraPublisher/photonvision-rear_Port_1181_Input_MJPEG_Server",
               "period": 0.06,
               "rotation_turns": 0
             }
@@ -570,10 +570,10 @@
         "layouts": [
           {
             "title": "Shooter",
-            "x": 1235.0,
-            "y": 475.0,
-            "width": 380.0,
-            "height": 285.0,
+            "x": 1330.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 380.0,
             "type": "List Layout",
             "properties": {
               "label_position": "TOP"
@@ -626,13 +626,30 @@
         "containers": [
           {
             "title": "Auto-Shoot Active",
-            "x": 380.0,
+            "x": 855.0,
             "y": 380.0,
-            "width": 380.0,
+            "width": 190.0,
             "height": 95.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/ShooterCommand/ShootWhenReadyCommandActive",
+              "period": 0.06,
+              "data_type": "boolean",
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "Ready To Shoot",
+            "x": 665.0,
+            "y": 380.0,
+            "width": 190.0,
+            "height": 95.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/AdvantageKit/RealOutputs/ShooterCommand/Ready/IsReadyToShoot",
               "period": 0.06,
               "data_type": "boolean",
               "true_color": 4283215696,
@@ -661,9 +678,9 @@
           {
             "title": "Operator Override",
             "x": 1615.0,
-            "y": 475.0,
+            "y": 380.0,
             "width": 285.0,
-            "height": 285.0,
+            "height": 380.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/ManualOverride/Operator",
@@ -757,9 +774,9 @@
           {
             "title": "Is Intaking",
             "x": 1045.0,
-            "y": 475.0,
-            "width": 190.0,
-            "height": 190.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 285.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/Subsystems/Intake/IsIntaking",
@@ -775,7 +792,7 @@
             "title": "Intake State",
             "x": 1045.0,
             "y": 665.0,
-            "width": 190.0,
+            "width": 285.0,
             "height": 95.0,
             "type": "Text Display",
             "properties": {
@@ -786,16 +803,37 @@
             }
           },
           {
-            "title": "Rear-Left Camera",
-            "x": 1140.0,
-            "y": 0.0,
+            "title": "Auto-Shoot Temp Disable",
+            "x": 665.0,
+            "y": 475.0,
             "width": 380.0,
-            "height": 475.0,
-            "type": "Camera Stream",
+            "height": 95.0,
+            "type": "Boolean Box",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1183_Input_MJPEG_Server",
+              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootTemporarilyDisabled",
               "period": 0.06,
-              "rotation_turns": 0
+              "data_type": "boolean",
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "Auto-Shoot Enabled",
+            "x": 380.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 190.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootEnabled",
+              "period": 0.06,
+              "data_type": "boolean",
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
             }
           },
           {
@@ -803,10 +841,36 @@
             "x": 1520.0,
             "y": 0.0,
             "width": 380.0,
-            "height": 475.0,
+            "height": 380.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1181_Input_MJPEG_Server",
+              "topic": "/CameraPublisher/photonvision-rear_Port_1181_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Rear-Left Camera",
+            "x": 1140.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-rear_Port_1183_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Front Camera",
+            "x": 760.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-front_Port_1181_Input_MJPEG_Server",
               "period": 0.06,
               "rotation_turns": 0
             }
@@ -848,70 +912,6 @@
               "trajectory_color": 4294967295,
               "show_robot_outside_widget": true
             }
-          },
-          {
-            "title": "Front Camera",
-            "x": 760.0,
-            "y": 0.0,
-            "width": 380.0,
-            "height": 475.0,
-            "type": "Camera Stream",
-            "properties": {
-              "topic": "/CameraPublisher/webcam_0-raw",
-              "period": 0.06,
-              "rotation_turns": 0
-            }
-          },
-          {
-            "title": "Auto-Shoot Enabled",
-            "x": 380.0,
-            "y": 475.0,
-            "width": 190.0,
-            "height": 95.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootEnabled",
-              "period": 0.06,
-              "data_type": "boolean",
-              "true_color": 4283215696,
-              "false_color": 4294198070,
-              "true_icon": "None",
-              "false_icon": "None"
-            }
-          },
-          {
-            "title": "Ready To Shoot",
-            "x": 570.0,
-            "y": 475.0,
-            "width": 190.0,
-            "height": 95.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/AdvantageKit/RealOutputs/ShooterCommand/Ready/IsReadyToShoot",
-              "period": 0.06,
-              "data_type": "boolean",
-              "true_color": 4283215696,
-              "false_color": 4294198070,
-              "true_icon": "None",
-              "false_icon": "None"
-            }
-          },
-          {
-            "title": "Auto-Shoot Temp Disabled",
-            "x": 760.0,
-            "y": 475.0,
-            "width": 285.0,
-            "height": 95.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootTemporarilyDisabled",
-              "period": 0.06,
-              "data_type": "boolean",
-              "true_color": 4283215696,
-              "false_color": 4294198070,
-              "true_icon": "None",
-              "false_icon": "None"
-            }
           }
         ]
       }
@@ -922,10 +922,10 @@
         "layouts": [
           {
             "title": "Shooter",
-            "x": 1235.0,
-            "y": 475.0,
-            "width": 380.0,
-            "height": 285.0,
+            "x": 1330.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 380.0,
             "type": "List Layout",
             "properties": {
               "label_position": "TOP"
@@ -978,9 +978,9 @@
         "containers": [
           {
             "title": "Auto-Shoot Active",
-            "x": 380.0,
+            "x": 855.0,
             "y": 380.0,
-            "width": 380.0,
+            "width": 190.0,
             "height": 95.0,
             "type": "Boolean Box",
             "properties": {
@@ -995,8 +995,8 @@
           },
           {
             "title": "Ready To Shoot",
-            "x": 570.0,
-            "y": 475.0,
+            "x": 665.0,
+            "y": 380.0,
             "width": 190.0,
             "height": 95.0,
             "type": "Boolean Box",
@@ -1030,9 +1030,9 @@
           {
             "title": "Operator Override",
             "x": 1615.0,
-            "y": 475.0,
+            "y": 380.0,
             "width": 285.0,
-            "height": 285.0,
+            "height": 380.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/ManualOverride/Operator",
@@ -1164,9 +1164,9 @@
           {
             "title": "Is Intaking",
             "x": 1045.0,
-            "y": 475.0,
-            "width": 190.0,
-            "height": 190.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 285.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/Subsystems/Intake/IsIntaking",
@@ -1182,7 +1182,7 @@
             "title": "Intake State",
             "x": 1045.0,
             "y": 665.0,
-            "width": 190.0,
+            "width": 285.0,
             "height": 95.0,
             "type": "Text Display",
             "properties": {
@@ -1193,50 +1193,28 @@
             }
           },
           {
-            "title": "Rear-Left Camera",
-            "x": 1140.0,
-            "y": 0.0,
+            "title": "Auto-Shoot Temp Disable",
+            "x": 665.0,
+            "y": 475.0,
             "width": 380.0,
-            "height": 475.0,
-            "type": "Camera Stream",
+            "height": 95.0,
+            "type": "Boolean Box",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1183_Input_MJPEG_Server",
+              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootTemporarilyDisabled",
               "period": 0.06,
-              "rotation_turns": 0
-            }
-          },
-          {
-            "title": "Rear-Right Camera",
-            "x": 1520.0,
-            "y": 0.0,
-            "width": 380.0,
-            "height": 475.0,
-            "type": "Camera Stream",
-            "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1181_Input_MJPEG_Server",
-              "period": 0.06,
-              "rotation_turns": 0
-            }
-          },
-          {
-            "title": "Front Camera",
-            "x": 760.0,
-            "y": 0.0,
-            "width": 380.0,
-            "height": 475.0,
-            "type": "Camera Stream",
-            "properties": {
-              "topic": "/CameraPublisher/webcam_0-raw",
-              "period": 0.06,
-              "rotation_turns": 0
+              "data_type": "boolean",
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
             }
           },
           {
             "title": "Auto-Shoot Enabled",
             "x": 380.0,
-            "y": 475.0,
-            "width": 190.0,
-            "height": 95.0,
+            "y": 380.0,
+            "width": 285.0,
+            "height": 190.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootEnabled",
@@ -1249,20 +1227,42 @@
             }
           },
           {
-            "title": "Auto-Shoot Temp Disabled",
-            "x": 760.0,
-            "y": 475.0,
-            "width": 285.0,
-            "height": 95.0,
-            "type": "Boolean Box",
+            "title": "Rear-Right Camera",
+            "x": 1520.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
             "properties": {
-              "topic": "/AdvantageKit/RealOutputs/Subsystems/Shooter/AutoShootTemporarilyDisabled",
+              "topic": "/CameraPublisher/photonvision-rear_Port_1181_Input_MJPEG_Server",
               "period": 0.06,
-              "data_type": "boolean",
-              "true_color": 4283215696,
-              "false_color": 4294198070,
-              "true_icon": "None",
-              "false_icon": "None"
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Rear-Left Camera",
+            "x": 1140.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-rear_Port_1183_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Front Camera",
+            "x": 760.0,
+            "y": 0.0,
+            "width": 380.0,
+            "height": 380.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-front_Port_1181_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
             }
           }
         ]
@@ -2871,19 +2871,6 @@
             }
           },
           {
-            "title": "Rear-Left Camera",
-            "x": 1235.0,
-            "y": 285.0,
-            "width": 285.0,
-            "height": 285.0,
-            "type": "Camera Stream",
-            "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1183_Input_MJPEG_Server",
-              "period": 0.06,
-              "rotation_turns": 0
-            }
-          },
-          {
             "title": "Rear-Right Camera",
             "x": 1235.0,
             "y": 570.0,
@@ -2891,7 +2878,20 @@
             "height": 285.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/photonvision_Port_1181_Input_MJPEG_Server",
+              "topic": "/CameraPublisher/photonvision-rear_Port_1181_Input_MJPEG_Server",
+              "period": 0.06,
+              "rotation_turns": 0
+            }
+          },
+          {
+            "title": "Rear-Left Camera",
+            "x": 1235.0,
+            "y": 285.0,
+            "width": 285.0,
+            "height": 285.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/photonvision-rear_Port_1183_Input_MJPEG_Server",
               "period": 0.06,
               "rotation_turns": 0
             }
@@ -2904,7 +2904,7 @@
             "height": 285.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/webcam_0-raw",
+              "topic": "/CameraPublisher/photonvision-front_Port_1181_Input_MJPEG_Server",
               "period": 0.06,
               "rotation_turns": 0
             }
