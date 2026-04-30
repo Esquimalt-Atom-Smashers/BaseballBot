@@ -201,6 +201,7 @@ public final class ShooterCommands {
 
     Pose2d pose = drive.getPose();
     ChassisSpeeds fieldSpeeds = drive.getFieldRelativeChassisSpeeds();
+    boolean isHubShot = isShooterTargetHub(drive);
     Translation3d target3d = getShooterTarget3d(drive);
 
     // Phase delay: predict pose forward so shot is for when ball actually leaves
@@ -247,7 +248,7 @@ public final class ShooterCommands {
               fieldSpeeds,
               target3d,
               ShooterConstants.kLookaheadIterations,
-              isShooterTargetHub(drive));
+              isHubShot);
       hoodAngleRadFromSolve = lookupShot.commandedHoodAngleRad();
       double rpmCmd =
           lookupShot.flywheelRpmTable()
@@ -299,7 +300,11 @@ public final class ShooterCommands {
     if (enableCalculator) {
       if (hoodEnabled) {
         if (shootWhenReadyActive) {
-          hood.setTargetAngleRad(hoodAngleRadFromSolve);
+          double hoodAngleCommandRad = isHubShot
+              ? Math.max(hoodAngleRadFromSolve, ShooterConstants.kHubMinHoodAngleRad) : hoodAngleRadFromSolve;
+          hood.setTargetAngleRad(hoodAngleCommandRad);
+          Logger.recordOutput(logRoot + "Shooter/HoodCommandDeg", Units.radiansToDegrees(hoodAngleCommandRad));
+          Logger.recordOutput(logRoot + "Shooter/HubMinHoodAngleApplied", isHubShot);
         } else {
           hood.setTargetAngleRad(HoodConstants.kDisabledAngleRad);
         }

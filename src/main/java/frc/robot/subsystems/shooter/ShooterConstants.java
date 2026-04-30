@@ -23,14 +23,14 @@ public final class ShooterConstants {
   public static final double kAutoSelectShootingTargetAllianceZoneTolerance = 1.5;
 
   /** When aiming at the hub, autoshoot requires at least this horizontal distance to hub center (m). */
-  public static final double kMinHubAutoshootDistanceM = 1.0; // TODO: May need tuning
+  public static final double kMinHubAutoshootDistanceM = 1.5; // TODO: May need tuning
 
   /** Transform from robot center to Turret pivot. +X = forward, +Y = left, +Z = up (meters). */
   public static final Transform3d robotToTurret =
       new Transform3d(-0.07, -0.165, 0.45, new Rotation3d(0.0, 0.0, Units.degreesToRadians(0.0)));
 
-  /** Distance above funnel the trajectory must pass (20 in), meters. */
-  public static final double kDistanceAboveFunnelM = Units.inchesToMeters(0.0); // TODO: Increase if balls shoot too low.
+  /** Distance above funnel the trajectory must pass, meters. */
+  public static final double kDistanceAboveFunnelM = Units.inchesToMeters(10.0); // TODO: Increase if balls shoot too low.
 
   /** Number of iterations for moving-shot lookahead. */
   public static final int kLookaheadIterations = 3;
@@ -76,6 +76,9 @@ public final class ShooterConstants {
    * this fixed launch angle. Matches {@link HoodConstants#kDisabledAngleRad}.
    */
   public static final double kFixedHoodAngleWhenDisabledRad = HoodConstants.kDisabledAngleRad;
+
+  /** Minimum commanded hood elevation (rad) when shooting at the hub. */
+  public static final double kHubMinHoodAngleRad = Units.degreesToRadians(65.0);
 
   /** Transform from Turret pivot to camera (when camera is on Turret). */
   public static final Transform3d turretToCamera =
