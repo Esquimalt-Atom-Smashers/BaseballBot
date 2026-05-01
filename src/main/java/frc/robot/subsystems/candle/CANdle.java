@@ -38,37 +38,9 @@ public class CANdle extends SubsystemBase {
 
   @Override
   public void periodic() {
-    boolean override = manualOverrideSupplier.getAsBoolean();
-    boolean shootReady = autoShootEnabledSupplier.getAsBoolean();
-    boolean shootTempDisabled = autoShootTempDisabledSupplier.getAsBoolean();
-
-    // Setting the led color
-    if (override) {
-      setLEDAnimation(kManualOverrideAnimation);
-      setLEDColor(kManualOverrideColor);
-      Logger.recordOutput("Subsystems/LED/CANdle/State", "OverrideStrobe");
-    } else if (shootReady && shooter != null) {
-      setLEDAnimation(AnimationType.None);
-      if (shooter.isReadyToShoot()) {
-        setLEDColor(kShootWhenReadyColor);
-        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootingWhenReady");
-      } else if (shootTempDisabled) {
-        setLEDColor(kShootWhenReadyTempDisabledColor);
-        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyTempDisabled");
-      } else {
-        setLEDColor(kShootWhenReadyScheduledColor);
-        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyScheduled");
-      }
-    } else if (DriverStation.isEnabled()) {
-      setLEDAnimation(AnimationType.None);
-      setLEDColor(kIdleColor);
-      Logger.recordOutput("Subsystems/LED/CANdle/State", "EnabledIdle");
-    } else {
-      setLEDAnimation(kDisabledAnimation);
-      Logger.recordOutput("Subsystems/LED/CANdle/State", "DisabledRainbow");
-    }
-
     candleIO.updateInputs(candleIOInputs);
+
+    setCustomLEDColors();
 
     Logger.recordOutput("Subsystems/LED/CANdle/Inputs/CurrentAnimationType", candleIOInputs.currentAnimationType.name());
     Logger.recordOutput(
@@ -82,6 +54,46 @@ public class CANdle extends SubsystemBase {
     Logger.recordOutput("Subsystems/LED/CANdle/Inputs/StartLEDIndex", candleIOInputs.startLEDIndex);
     Logger.recordOutput("Subsystems/LED/CANdle/Inputs/EndLEDIndex", candleIOInputs.endLEDIndex);
   } // End periodic
+
+  /** Sets the color of the LEDs depending on what state the robot is in  */
+  private void setCustomLEDColors() {
+    boolean override = manualOverrideSupplier.getAsBoolean();
+    boolean shootReady = autoShootEnabledSupplier.getAsBoolean();
+    boolean shootTempDisabled = autoShootTempDisabledSupplier.getAsBoolean();
+
+    AnimationType targetAnimation = AnimationType.None;
+    RGBWColor targetColor = new RGBWColor(0, 0, 0, 255);
+    // Setting the led color
+    if (override) {
+      // OVERRIDE STATES
+      targetAnimation = kManualOverrideAnimation;
+      targetColor = kManualOverrideColor;
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "OverrideStrobe");
+    } else if (shootReady && shooter != null) {
+      // SHOOTER STATES
+      if (shooter.isReadyToShoot()) {
+        targetColor = kShootWhenReadyColor;
+        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootingWhenReady");
+      } else if (shootTempDisabled) {
+        targetColor = kShootWhenReadyTempDisabledColor;
+        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyTempDisabled");
+      } else {
+        targetColor = kShootWhenReadyScheduledColor;
+        Logger.recordOutput("Subsystems/LED/CANdle/State", "ShootWhenReadyScheduled");
+      }
+    } else if (DriverStation.isEnabled()) {
+      // IDLE
+      targetColor = kIdleColor;
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "EnabledIdle");
+    } else {
+      // DISABLED
+      targetAnimation = kDisabledAnimation;
+      Logger.recordOutput("Subsystems/LED/CANdle/State", "DisabledRainbow");
+    }
+
+    setLEDAnimation(targetAnimation);
+    setLEDColor(targetColor);
+  } // End setCustomLEDColors
 
   /** Supplier: true while {@link frc.robot.commands.autoShootEnabled} (or equivalent) is active. */
   public void setAutoShootEnabledSupplier(BooleanSupplier supplier) {
