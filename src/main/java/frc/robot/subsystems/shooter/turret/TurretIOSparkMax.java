@@ -91,14 +91,13 @@ public class TurretIOSparkMax implements TurretIO {
   } // End setTargetPosition
 
   @Override
-  public void setTargetPosition(
-      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
+  public void setTargetPosition(double targetRads, double targetRadsPerSec, double velocityFFVolts) {
     double targetRot = Units.radiansToRotations(targetRads);
     closedLoopController.setSetpoint(
         targetRot,
         SparkBase.ControlType.kPosition,
         ClosedLoopSlot.kSlot0,
-        arbitraryFeedforwardVolts);
+        velocityFFVolts);
   } // End setTargetPosition
   
   @Override
