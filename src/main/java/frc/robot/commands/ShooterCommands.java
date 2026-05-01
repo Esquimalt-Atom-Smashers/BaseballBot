@@ -28,14 +28,15 @@ public final class ShooterCommands {
   private ShooterCommands() {}
 
   private static final String kTargetAimOffsetDegKey = "Shooter/TargetAimOffsetDeg";
-  private static final String kExitVelocityMultiplierAdditiveKey = "Shooter/ExitVelocityCompensationMultiplierAdditive";
+  private static final String kExitVelocityMultiplierAdditiveHubKey = "Shooter/ExitVelocityCompensationMultiplierAdditiveHub";
+  private static final String kExitVelocityMultiplierAdditivePassingKey =  "Shooter/ExitVelocityCompensationMultiplierAdditivePassing";
   private static final String kUseLookupTableKey = "Shooter/UseLookupTable";
   private static final double kDefaultTargetAimOffsetDeg = 0.0;
-  private static final double kDefaultExitVelocityMultiplierAdditive = 0.0;
 
   static {
     SmartDashboard.putNumber(kTargetAimOffsetDegKey, kDefaultTargetAimOffsetDeg);
-    SmartDashboard.putNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
+    SmartDashboard.putNumber(kExitVelocityMultiplierAdditiveHubKey, ShooterConstants.kExitVelocityCompensationMultiplierAdditiveHub);
+    SmartDashboard.putNumber(kExitVelocityMultiplierAdditivePassingKey, ShooterConstants.kExitVelocityCompensationMultiplierAdditivePassing);
     SmartDashboard.putBoolean(kUseLookupTableKey, false);
   }
 
@@ -201,6 +202,7 @@ public final class ShooterCommands {
 
     Pose2d pose = drive.getPose();
     ChassisSpeeds fieldSpeeds = drive.getFieldRelativeChassisSpeeds();
+    boolean isHubShot = isShooterTargetHub(drive);
     Translation3d target3d = getShooterTarget3d(drive);
 
     // Phase delay: predict pose forward so shot is for when ball actually leaves
@@ -237,8 +239,12 @@ public final class ShooterCommands {
     double distanceTurretPivotToHubM;
     double flywheelRadPerSec;
 
+    double exitVelocityMultiplierAdditiveHub =
+        SmartDashboard.getNumber(kExitVelocityMultiplierAdditiveHubKey, ShooterConstants.kExitVelocityCompensationMultiplierAdditiveHub);
+    double exitVelocityMultiplierAdditivePassing =
+        SmartDashboard.getNumber(kExitVelocityMultiplierAdditivePassingKey, ShooterConstants.kExitVelocityCompensationMultiplierAdditivePassing);
     double exitVelocityMultiplierAdditive =
-        SmartDashboard.getNumber(kExitVelocityMultiplierAdditiveKey, kDefaultExitVelocityMultiplierAdditive);
+        isHubShot ? exitVelocityMultiplierAdditiveHub : exitVelocityMultiplierAdditivePassing;
 
     if (useLookupTable) {
       ShooterCalculator.LookupTableMovingShot lookupShot =
@@ -247,7 +253,7 @@ public final class ShooterCommands {
               fieldSpeeds,
               target3d,
               ShooterConstants.kLookaheadIterations,
-              isShooterTargetHub(drive));
+              isHubShot);
       hoodAngleRadFromSolve = lookupShot.commandedHoodAngleRad();
       double rpmCmd =
           lookupShot.flywheelRpmTable()
@@ -295,11 +301,17 @@ public final class ShooterCommands {
     Logger.recordOutput(logRoot + "Shooter/CalculatorVelocityRpm", Units.radiansPerSecondToRotationsPerMinute(flywheelRadPerSec));
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityMps", exitVelMps);
     Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditive", exitVelocityMultiplierAdditive);
+    Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditiveHub", exitVelocityMultiplierAdditiveHub);
+    Logger.recordOutput(logRoot + "Shooter/ExitVelocityCompensationMultiplierAdditivePassing", exitVelocityMultiplierAdditivePassing);
 
     if (enableCalculator) {
       if (hoodEnabled) {
         if (shootWhenReadyActive) {
-          hood.setTargetAngleRad(hoodAngleRadFromSolve);
+          double hoodAngleCommandRad = isHubShot
+              ? Math.max(hoodAngleRadFromSolve, ShooterConstants.kHubMinHoodAngleRad) : hoodAngleRadFromSolve;
+          hood.setTargetAngleRad(hoodAngleCommandRad);
+          Logger.recordOutput(logRoot + "Shooter/HoodCommandDeg", Units.radiansToDegrees(hoodAngleCommandRad));
+          Logger.recordOutput(logRoot + "Shooter/HubMinHoodAngleApplied", isHubShot);
         } else {
           hood.setTargetAngleRad(HoodConstants.kDisabledAngleRad);
         }

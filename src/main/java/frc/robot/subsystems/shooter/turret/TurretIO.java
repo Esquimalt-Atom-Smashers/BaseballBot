@@ -33,7 +33,7 @@ public interface TurretIO {
    * Default ignores velocity and FF volts.
    */
   default void setTargetPosition(
-      double targetRads, double velocityFeedforwardRadPerSec, double arbitraryFeedforwardVolts) {
+      double targetRads, double velocityFeedforwardRadPerSec, double velocityFFVolts) {
     setTargetPosition(targetRads, velocityFeedforwardRadPerSec);
   }
 

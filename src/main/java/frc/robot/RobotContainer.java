@@ -84,14 +84,14 @@ public class RobotContainer {
 	private boolean isDriveEnabled 		= true;
 	private boolean isVisionEnabled 	= true;
 	private boolean isIntakeEnabled 	= true;
-	public boolean isExtenderEnabled = true;
+	private boolean isExtenderEnabled = true;
 	private boolean isAgitatorEnabled = true;
 	private boolean isTransferEnabled = true;
 	private boolean isTurretEnabled 	= true;
 	private boolean isHoodEnabled 		= true;
 	private boolean isFlywheelEnabled = true;
-	private boolean isHangEnabled 		= false;
-	private boolean isCandleEnabled 	= true;
+	private boolean isHangEnabled 		= true;
+	private boolean isCandleEnabled 	= false;
 
 	// Simulation Toggle
 	private boolean halfFuelOnly 			= false;
@@ -123,6 +123,10 @@ public class RobotContainer {
 	// Shooter Manager
 	private final Shooter shooter;
 	private final ShootWhenReadyCommand shootWhenReadyCommand;
+	@AutoLogOutput(key = "Subsystems/Shooter/AutoShootEnabled")
+	private boolean autoShootEnabled = false;
+	@AutoLogOutput(key = "Subsystems/Shooter/AutoShootTemporarilyDisabled")
+	private boolean autoShootTemporarilyDisabled = false;
 
 	// Safe Extender Retracter
 	private final Command safeRetractExtenderCommand;
@@ -142,10 +146,6 @@ public class RobotContainer {
 	@AutoLogOutput(key = "Subsystems/Shooter/Turret/DriverTurretOverride")
 	private boolean driverTurretOverride = false;
 	private boolean trenchAutoShootEnabled = true;
-	@AutoLogOutput(key = "Subsystems/Shooter/AutoShootEnabled")
-	private boolean autoShootEnabled = false;
-	@AutoLogOutput(key = "Subsystems/Shooter/AutoShootTemporarilyDisabled")
-	private boolean autoShootTemporarilyDisabled = false;
 
 	// Hang Hold Mode
 	@AutoLogOutput(key = "Subsystems/Hang/HangHoldModeEnabled")

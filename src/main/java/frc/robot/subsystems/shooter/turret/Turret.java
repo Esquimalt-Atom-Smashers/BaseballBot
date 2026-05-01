@@ -38,8 +38,8 @@ public class Turret extends SubsystemBase {
 
   private Rotation2d targetRelativeToRobot = kDefaultAimDirectionRobotFrame; // Target in robot frame (0 = forward).
   private double lastTargetPositionRad = 0.0; // Last position setpoint sent to IO.
-  private double velocityFeedforwardRadPerSec = 0.0;
-  private double aimFfVoltsPerRadPerSec = kAimFfVPerRadS;
+  private double targetRadsPerSec = 0.0;
+  private double aimFFVoltsPerRadPerSec = kAimFfVPerRadS;
   private double lastSmartDashboardTargetPosRad = 0.0;
   private boolean lastManualOverride = false;
 
@@ -57,20 +57,19 @@ public class Turret extends SubsystemBase {
     SmartDashboard.putNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
     SmartDashboard.putNumber("Turret/TargetPositionDeg",
         TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(robotToTurretFrameRad(kDefaultAimDirectionRobotFrame.getRadians()))));
-    SmartDashboard.putNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
   } // End Turret Constructor
 
   @Override
   public void periodic() {
     turretIO.updateInputs(turretInputs);
-    aimFfVoltsPerRadPerSec = SmartDashboard.getNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
+    aimFFVoltsPerRadPerSec = SmartDashboard.getNumber("Turret/kAimFfVPerRadS", kAimFfVPerRadS);
 
     double targetPositionRad;
 
     // Disabled: Set target position to current position with no velocity feedforward (holds current position).
     if (DriverStation.isDisabled()) {
       state = State.IDLE;
-      velocityFeedforwardRadPerSec = 0.0;
+      targetRadsPerSec = 0.0;
       targetPositionRad = MathUtil.clamp(turretInputs.positionRads, kMinAngleRad, kMaxAngleRad);
     }
     // Enabled: Aim at the target only if aim-at-target is enabled (e.g. ShootWhenReadyCommand active); otherwise hold position.
@@ -78,7 +77,7 @@ public class Turret extends SubsystemBase {
     else if (!manualOverrideSupplier.getAsBoolean()) {
       if (aimAtTargetSupplier.getAsBoolean()) {
         setTargetRelativeToRobot(ShooterCommands.getTurretAngleFromShot(drive));
-        setVelocityFeedforwardRadPerSec(
+        setTargetRadsPerSec(
             ShooterCalculator.robotFramePivotToTargetAimRateRadPerSec(
                 drive.getPose(),
                 drive.getChassisSpeeds(),
@@ -87,7 +86,7 @@ public class Turret extends SubsystemBase {
         state = atTarget() ? State.AT_TARGET : State.TRACKING;
       } else {
         state = State.IDLE;
-        setVelocityFeedforwardRadPerSec(0.0);
+        setTargetRadsPerSec(0.0);
         targetPositionRad = MathUtil.clamp(turretInputs.positionRads, kMinAngleRad, kMaxAngleRad);
       }
     }
@@ -105,14 +104,14 @@ public class Turret extends SubsystemBase {
       state = State.MANUAL;
 
       lastSmartDashboardTargetPosRad = targetTurretFrameRad;
-      velocityFeedforwardRadPerSec = 0.0;
+      targetRadsPerSec = 0.0;
       targetPositionRad = getSetpointRad();
     }
 
     lastTargetPositionRad = targetPositionRad;
     lastManualOverride = manualOverrideSupplier.getAsBoolean();
 
-    double arbitraryFeedforwardVolts = MathUtil.clamp(velocityFeedforwardRadPerSec * aimFfVoltsPerRadPerSec, -kMaxVoltage, kMaxVoltage);
+    double velocityFFVolts = MathUtil.clamp(targetRadsPerSec * aimFFVoltsPerRadPerSec, -kMaxVoltage, kMaxVoltage);
 
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/Inputs/MotorConnected", turretInputs.motorConnected);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/Inputs/PositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(turretInputs.positionRads)));
@@ -122,12 +121,12 @@ public class Turret extends SubsystemBase {
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/TargetPositionDeg", TelemetryUtil.roundToTwoDecimals(Units.radiansToDegrees(targetPositionRad)));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/TargetRobotFrameDeg", TelemetryUtil.roundToTwoDecimals(getTargetRelativeToRobot().getDegrees()));
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/RobotFrameDeg", TelemetryUtil.roundToTwoDecimals(getRobotFramePosition().getDegrees()));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimRateFeedforwardDegPerSec", Units.radiansToDegrees(velocityFeedforwardRadPerSec));
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimFfVPerRadS", aimFfVoltsPerRadPerSec);
-    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimFfVolts", arbitraryFeedforwardVolts);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimRateFeedforwardDegPerSec", Units.radiansToDegrees(targetRadsPerSec));
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/AimFFVPerRadS", aimFFVoltsPerRadPerSec);
+    Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/VelocityFFVolts", velocityFFVolts);
     Logger.recordOutput(logRoot + "Subsystems/Shooter/Turret/State", state.name());
 
-    turretIO.setTargetPosition(targetPositionRad, velocityFeedforwardRadPerSec, arbitraryFeedforwardVolts);
+    turretIO.setTargetPosition(targetPositionRad, targetRadsPerSec, velocityFFVolts);
   } // End periodic
 
   /** Get current state. */
@@ -137,8 +136,8 @@ public class Turret extends SubsystemBase {
 
   
   /** Set velocity feedforward. */
-  public void setVelocityFeedforwardRadPerSec(double radPerSec) {
-    velocityFeedforwardRadPerSec = radPerSec;
+  public void setTargetRadsPerSec(double radPerSec) {
+    targetRadsPerSec = radPerSec;
   } // End setVelocityFeedforwardRadPerSec
 
   /** Set manualOverrideSupplier. */

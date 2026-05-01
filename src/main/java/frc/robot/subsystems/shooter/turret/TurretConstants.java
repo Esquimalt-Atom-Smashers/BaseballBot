@@ -38,20 +38,20 @@ public final class TurretConstants {
    * SPARK arbitrary FF scale: volts per aim angular rate (rad/s). Tune on robot with {@code
    * Turret/kAimFfVPerRadS}; start low and increase until lag drops without oscillation.
    */
-  public static final double kAimFfVPerRadS = 0.02; // TODO: Tune, increase by 0.01 until lag drops without oscillation.
+  public static final double kAimFfVPerRadS = 0.84;
 
   /** Period for sending signals to the motor. SPARK MAX only. */
   public static final int kSignalsPeriodMs = 19;
   public static final int kEncoderVelocitySignalPeriodMs = 19;
   
-  /** Default aim direction in robot frame (0 = forward); π = toward robot back. */
-  public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.kPi;
+  /** Default aim direction in robot frame (0 = forward). */
+  public static final Rotation2d kDefaultAimDirectionRobotFrame = Rotation2d.fromDegrees(-161.45377);
 
   /** Minimum Turret angle. */
-  public static final double kMinAngleRad = Units.degreesToRadians(-181.0);
+  public static final double kMinAngleRad = Units.degreesToRadians(-199.54623);
 
   /** Maximum Turret angle. */
-  public static final double kMaxAngleRad = Units.degreesToRadians(181.0);
+  public static final double kMaxAngleRad = Units.degreesToRadians(162.45377);
 
   /** Max voltage magnitude applied to the motor. */
   public static final double kMaxVoltage = 12.0;

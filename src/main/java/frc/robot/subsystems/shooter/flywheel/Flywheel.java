@@ -99,7 +99,16 @@ public class Flywheel extends SubsystemBase {
       state = State.CHARGING;
     }
 
-    flywheelIO.setTargetVelocity(state == State.IDLE ? kIdleVelocityRadPerSec : getSetpointVelocityRadPerSec());
+    // Only set target velocity if not idle, otherwise, if Idle velocity is no 0, set target to idle velocity. Otherwise, Coast.
+    if (state != State.IDLE) {
+      flywheelIO.setTargetVelocity(getSetpointVelocityRadPerSec());
+    }
+    else if ((state == State.IDLE) && (kIdleVelocityRadPerSec != 0.0)) {
+        flywheelIO.setTargetVelocity(kIdleVelocityRadPerSec);
+    }
+    else {
+      flywheelIO.stop();
+    }
   } // End periodic
 
   /** Set the Flywheel state. */

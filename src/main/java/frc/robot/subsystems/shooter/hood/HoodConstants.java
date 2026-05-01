@@ -45,22 +45,22 @@ public final class HoodConstants { // XXX: Add correct values
 
   // TODO: Add correct values
   /** Axon analog voltage when hood is at 75°. */
-  public static final double kAnalogVoltsAt75deg = 1.7578125;
+  public static final double kAnalogVoltsAt75deg = 1.8375;
 
   /** Axon analog voltage when hood is at 70°. */
-  public static final double kAnalogVoltsAt70deg = 1.800625;
+  public static final double kAnalogVoltsAt70deg = 1.87;
 
   /** Axon analog voltage when hood is at 65°. */
-  public static final double kAnalogVoltsAt65deg = 1.8434375;
+  public static final double kAnalogVoltsAt65deg = 1.9175;
 
   /** Axon analog voltage when hood is at 60°. */
-  public static final double kAnalogVoltsAt60deg = 1.88625;
+  public static final double kAnalogVoltsAt60deg = 1.945;
 
   /** Axon analog voltage when hood is at 55°. */
-  public static final double kAnalogVoltsAt55deg = 1.9290625;
+  public static final double kAnalogVoltsAt55deg = 1.99;
 
   /** Axon analog voltage when hood is at 50°. */
-  public static final double kAnalogVoltsAt50deg = 1.971875;
+  public static final double kAnalogVoltsAt50deg = 2.03;
 
   /** Ordered hood-angle breakpoints for Axon analog interpolation (rad). */
   public static final double[] kAnalogAngleBreakpointsRad = {
