@@ -39,7 +39,7 @@ public final class HangConstants {
   public static final double kStoredPositionMeters = Units.inchesToMeters(0.0);
   
   /** Target position when the Hang is in Hanging (retracted part way) mode. */
-  public static final double kHangingPositionMeters = Units.inchesToMeters(2.0);
+  public static final double kHangingPositionMeters = Units.inchesToMeters(1.0);
 
   /** Target position when the Hang is in Level_1 (extended) mode. */
   public static final double kLevel1PositionMeters = Units.inchesToMeters(7.75);

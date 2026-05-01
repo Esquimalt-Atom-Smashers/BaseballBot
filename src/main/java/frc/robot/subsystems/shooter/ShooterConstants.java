@@ -51,13 +51,13 @@ public final class ShooterConstants {
   public static final double kTargetAimOffsetDeg = 0.0;
 
   /** Multiplier on calculator exit velocity (e.g. air resistance). 1.0 = no change. */
-  public static final double kExitVelocityCompensationMultiplier = 1.54; // TODO: make 1.19 for Lookup
+  public static final double kExitVelocityCompensationMultiplier = 1.39; // TODO: make 1.19 for Lookup
 
   /** Hub-shot additive on top of {@link #kExitVelocityCompensationMultiplier}. */
   public static final double kExitVelocityCompensationMultiplierAdditiveHub = 0.0;
 
   /** Passing-shot additive on top of {@link #kExitVelocityCompensationMultiplier}. */
-  public static final double kExitVelocityCompensationMultiplierAdditivePassing = 1.0;
+  public static final double kExitVelocityCompensationMultiplierAdditivePassing = 2.0;
 
   /**
    * Sim-only efficiency from flywheel surface speed to launched fuel speed. Models wheel slip/transfer

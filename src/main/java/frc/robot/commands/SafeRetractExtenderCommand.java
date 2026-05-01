@@ -7,6 +7,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.subsystems.extender.Extender;
+import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.flywheel.Flywheel;
 import frc.robot.subsystems.shooter.turret.Turret;
 
@@ -24,6 +25,7 @@ public final class SafeRetractExtenderCommand {
       ShootWhenReadyCommand shootWhenReady,
       Flywheel flywheel,
       Extender extender,
+      Intake intake,
       Turret turret,
       Consumer<Boolean> driverTurretOverride) {
     return Commands.sequence(
@@ -37,6 +39,7 @@ public final class SafeRetractExtenderCommand {
               SmartDashboard.putNumber("Turret/TargetPositionDeg", 1.0);
             },
             extender,
+            intake,
             turret,
             flywheel),
         Commands.parallel(
@@ -47,6 +50,7 @@ public final class SafeRetractExtenderCommand {
                 Commands.runOnce(() -> driverTurretOverride.accept(false))),
             Commands.sequence(
                 Commands.waitSeconds(0.25),
-                Commands.runOnce(() -> extender.setRetractedState(), extender))));
+                Commands.runOnce(() -> extender.setRetractedState(), extender),
+                Commands.runOnce(() -> intake.setIdleState(), intake))));
   }
 }

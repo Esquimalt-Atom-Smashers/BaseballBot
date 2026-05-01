@@ -337,7 +337,7 @@ public class RobotContainer {
 
 		safeRetractExtenderCommand =
 				SafeRetractExtenderCommand.create(
-						shootWhenReadyCommand, flywheel, extender, turret, b -> driverTurretOverride = b);
+						shootWhenReadyCommand, flywheel, extender, intake, turret, b -> driverTurretOverride = b);
 
 		// Subsystem Manual Override Ignore Limits and Use SmartDashboard Supplier
 		intake.setIgnoreLimitsSupplier(() 	-> operatorManualOverride);
@@ -1468,7 +1468,7 @@ public class RobotContainer {
 
 		secondSimRobotBundle.safeRetractExtenderCommand =
 				SafeRetractExtenderCommand.create(
-						secondSimRobotBundle.shootWhenReady, secondSimRobotBundle.flywheel, secondSimRobotBundle.extender, secondSimRobotBundle.turret,
+						secondSimRobotBundle.shootWhenReady, secondSimRobotBundle.flywheel, secondSimRobotBundle.extender, secondSimRobotBundle.intake, secondSimRobotBundle.turret,
 						driverTurretOverrideEnabled -> secondSimRobotBundle.driverTurretOverride = driverTurretOverrideEnabled);
 
 		secondSimRobotBundle.turret.setManualOverrideSupplier(() -> operatorManualOverride || secondSimRobotBundle.driverTurretOverride);
