@@ -1,28 +1,22 @@
 package frc.robot.Subsystems;
 
 import frc.robot.Constants;
-import com.revrobotics.REVLibError;
-import com.revrobotics.PersistMode;
-import com.revrobotics.ResetMode;
-import com.revrobotics.spark.SparkLowLevel;
-import com.revrobotics.spark.SparkMax;
-import com.revrobotics.spark.config.SparkMaxConfig;
-import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+import frc.robot.Subsystems.motor.TalonBrushedMotor;
+
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class Drive extends SubsystemBase {
-    private final SparkMax leftMotor;
-    private final SparkMax rightMotor;
+    private final TalonBrushedMotor leftMotor;
 
-    public Drive(SparkMax leftMotor, SparkMax rightMotor) {
+    public Drive(TalonBrushedMotor leftMotor) {
         this.leftMotor = leftMotor;
-        this.rightMotor = rightMotor;
+        // this.rightMotor = rightMotor;
     }
 
     public void arcadeDrive(double forward, double turn) {
-        leftMotor.set(forward + turn);
-        rightMotor.set(forward - turn);
+        leftMotor.setPower(forward);
+        // rightMotor.set(forward - turn);
     }
 }

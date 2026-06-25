@@ -6,7 +6,8 @@
 
 package frc.robot;
 
-import org.littletonrobotics.junction.AutoLogOutput;
+
+import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.revrobotics.PersistMode;
 import com.revrobotics.ResetMode;
 import com.revrobotics.spark.SparkLowLevel;
@@ -19,6 +20,7 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 
 import frc.robot.Subsystems.*;
+import frc.robot.Subsystems.motor.TalonBrushedMotor;
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
  * "declarative" paradigm, very little robot logic should actually be handled in the {@link Robot}
@@ -32,7 +34,6 @@ public class RobotContainer {
 	private final CommandXboxController operatorController = new CommandXboxController(1);
 
 	// Competition Toggle
-	@AutoLogOutput(key = "CompetitionToggle")
 	private boolean isCompetition = true;
 
 	// Subsystems Toggle
@@ -50,23 +51,10 @@ public class RobotContainer {
       // Real robot, instantiate hardware IO implementations
 			case REAL:
 				if (isDriveEnabled) {
-					SparkMax leftMotor = new SparkMax(0, SparkLowLevel.MotorType.kBrushed);
-					SparkMax rightMotor = new SparkMax(1, SparkLowLevel.MotorType.kBrushed);
-
-					var sparkMaxConfig = new SparkMaxConfig();
-
-					sparkMaxConfig.idleMode(IdleMode.kBrake);
-					sparkMaxConfig.inverted(false);
-					sparkMaxConfig.smartCurrentLimit(25);
-					sparkMaxConfig.openLoopRampRate(0.3);
-					sparkMaxConfig.voltageCompensation(12.0);
-					leftMotor.configure(sparkMaxConfig, ResetMode.kNoResetSafeParameters, PersistMode.kPersistParameters);
-
-					sparkMaxConfig.inverted(true);
-					rightMotor.configure(sparkMaxConfig, ResetMode.kNoResetSafeParameters, PersistMode.kPersistParameters);
-					drive = new Drive(leftMotor, rightMotor);
+					TalonBrushedMotor leftMotor = new TalonBrushedMotor(1, false);
+					drive = new Drive(leftMotor);
 				} else {
-					drive = new Drive(null, null);
+					drive = new Drive(null);
 				}
 
 				// Subsystems
